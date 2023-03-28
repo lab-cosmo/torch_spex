@@ -8,6 +8,7 @@ def generate_splines(
     max_index,
     cutoff_radius,
     requested_accuracy=1e-8,
+    device="cpu"
 ):
     """Spline generator for tabulated radial integrals.
 
@@ -45,12 +46,6 @@ def generate_splines(
         derivatives = derivatives.T
         derivatives = derivatives.reshape(len(positions), max_index)
         return derivatives
-    
-    import matplotlib.pyplot as plt
-    positions = torch.linspace(0.0, 6.0, 100)
-    values = value_evaluator_2D(positions)
-    plt.plot(positions, values[:, 1])
-    plt.savefig("radial.pdf")
 
     dynamic_spliner = DynamicSpliner(
         0.0,
@@ -58,8 +53,8 @@ def generate_splines(
         value_evaluator_2D,
         derivative_evaluator_2D,
         requested_accuracy,
+        device=device
     )
-    dynamic_spliner.spline()
 
     return dynamic_spliner
 
@@ -73,6 +68,7 @@ class DynamicSpliner:
         values_fn,
         derivatives_fn,
         requested_accuracy,
+        device
     ) -> None:
 
         self.start = start
@@ -88,8 +84,6 @@ class DynamicSpliner:
         self.spline_derivatives = derivatives_fn(positions)
 
         self.number_of_custom_dimensions = len(self.spline_values.shape) - 1
-
-    def spline(self):
 
         while True:
             n_intermediate_positions = len(self.spline_positions) - 1
@@ -136,6 +130,10 @@ class DynamicSpliner:
             self.spline_positions = concatenated_positions[sort_indices]
             self.spline_values = concatenated_values[sort_indices]
             self.spline_derivatives = concatenated_derivatives[sort_indices]
+
+        self.spline_positions = self.spline_positions.to(device)
+        self.spline_values = self.spline_values.to(device)
+        self.spline_derivatives = self.spline_derivatives.to(device)
 
     def compute(self, positions):
         x = positions

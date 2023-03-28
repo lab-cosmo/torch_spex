@@ -10,12 +10,12 @@ from .radial_basis import RadialBasis
 
 class SphericalExpansion(torch.nn.Module):
 
-    def __init__(self, hypers, all_species) -> None:
+    def __init__(self, hypers, all_species, device="cpu") -> None:
         super().__init__()
 
         self.hypers = hypers
         self.all_species = all_species
-        self.vector_expansion_calculator = VectorExpansion(hypers)
+        self.vector_expansion_calculator = VectorExpansion(hypers, device=device)
 
     def forward(self, structures):
         
@@ -94,11 +94,11 @@ class SphericalExpansion(torch.nn.Module):
 
 class VectorExpansion(torch.nn.Module):
 
-    def __init__(self, hypers) -> None:
+    def __init__(self, hypers, device) -> None:
         super().__init__()
 
         self.hypers = hypers
-        self.radial_basis_calculator = RadialBasis(hypers["radial basis"])
+        self.radial_basis_calculator = RadialBasis(hypers["radial basis"], device=device)
         self.l_max = self.radial_basis_calculator.l_max
         self.spherical_harmonics_calculator = AngularBasis(self.l_max)
 

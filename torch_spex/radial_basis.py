@@ -1,14 +1,13 @@
 import torch
-import spherical_bessel
 from .le import get_le_spliner
 
 
 class RadialBasis(torch.nn.Module):
 
-    def __init__(self, hypers) -> None:
+    def __init__(self, hypers, device) -> None:
         super().__init__()
 
-        self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"])
+        self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"], device=device)
         self.l_max = len(self.n_max_l) - 1
         self.radial_transform = (lambda x: x)
 

@@ -6,48 +6,47 @@ from scipy.special import spherical_jn as j_l
 import ase.io
 import rascaline
 rascaline._c_lib._get_library()
-from torch_spex.spherical_bessel_utils import Jn_zeros
+from torch_spex.le import Jn_zeros
 from equistore import Labels
 from torch_spex.spherical_expansions import SphericalExpansion
 from torch_spex.structures import Structures
 
 device = "cpu"
 
-##############################
-# TODO: YOU NEED A TEST ON STRUCTURES WITH PBCS
-##############################
-
-
 torch.set_default_dtype(torch.float64)
 
 a = 6.0
-l_max = 3
-n_max = 5
+E_max = 200
 
 structures = ase.io.read("../datasets/rmd17/ethanol1.extxyz", ":100")
 
-hypers_torch_spex = {
-    "cutoff radius": a,
+hypers_spherical_expansion = {
+    "cutoff radius": 6.0,
     "radial basis": {
-        "cutoff radius": a,
-        "mode": "full bessel",
-        "kind": "first",
-        "l_max": l_max,
-        "n_max": [n_max, n_max, n_max, n_max]
-    },
-    "l_max": l_max
+        "r_cut": 6.0,
+        "E_max": 200 
+    }
 }
-calculator = SphericalExpansion(hypers_torch_spex, [1, 6, 8])
+calculator = SphericalExpansion(hypers_spherical_expansion, [1, 6, 8], device=device)
 transformed_structures = Structures(structures)
 transformed_structures.to(device)
 
 from torch.profiler import profile
 
 start_time = time.time()
-with profile() as prof:
+if True: #with profile() as prof:
     spherical_expansion_coefficients_torch_spex = calculator(transformed_structures)
 finish_time = time.time()
 print(f"torch_spex took {finish_time-start_time} s")
+
+all_species = np.unique(spherical_expansion_coefficients_torch_spex.keys["a_i"])
+
+l_max = 0
+for key, block in spherical_expansion_coefficients_torch_spex:
+    l_max = max(l_max, key[1])
+print("l_max is", l_max)
+n_max = spherical_expansion_coefficients_torch_spex.block(0).values.shape[2] // len(all_species)
+print("n_max is", n_max)
 
 l_big = 50
 n_big = 50
@@ -117,8 +116,8 @@ spline_points = rascaline.generate_splines(
 
 hypers_rascaline = {
     "cutoff": a,
-    "max_radial": n_max,
-    "max_angular": l_max,
+    "max_radial": int(n_max),
+    "max_angular": int(l_max),
     "center_atom_weight": 0.0,
     "radial_basis": {"TabulatedRadialIntegral": {"points": spline_points}},
     "atomic_gaussian_width": 100.0,
@@ -132,5 +131,4 @@ spherical_expansion_coefficients_rascaline = calculator.compute(structures)
 finish_time = time.time()
 print(f"Rascaline took {finish_time-start_time} s")
 
-print()
-print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
+#print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
