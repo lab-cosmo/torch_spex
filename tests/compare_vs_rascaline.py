@@ -5,7 +5,7 @@ from scipy.special import spherical_jn as j_l
 import ase.io
 import rascaline
 rascaline._c_lib._get_library()
-from torch_spex.spherical_bessel_utils import Jn_zeros
+from torch_spex.le import Jn_zeros
 from equistore import Labels
 from torch_spex.spherical_expansions import SphericalExpansion
 from torch_spex.structures import Structures

@@ -18,7 +18,7 @@ torch.set_default_dtype(torch.float64)
 a = 6.0
 E_max = 200
 
-structures = ase.io.read("../datasets/rmd17/ethanol1.extxyz", ":100")
+structures = ase.io.read("../datasets/rmd17/ethanol1.extxyz", ":20")
 
 hypers_spherical_expansion = {
     "cutoff radius": 6.0,
@@ -35,7 +35,8 @@ from torch.profiler import profile
 
 start_time = time.time()
 if True: #with profile() as prof:
-    spherical_expansion_coefficients_torch_spex = calculator(transformed_structures)
+    for _ in range(1000):
+        spherical_expansion_coefficients_torch_spex = calculator(transformed_structures)
 finish_time = time.time()
 print(f"torch_spex took {finish_time-start_time} s")
 
@@ -127,8 +128,9 @@ hypers_rascaline = {
 calculator = rascaline.SphericalExpansion(**hypers_rascaline)
 
 start_time = time.time()
-spherical_expansion_coefficients_rascaline = calculator.compute(structures)
+for _ in range(1000):
+    spherical_expansion_coefficients_rascaline = calculator.compute(structures)
 finish_time = time.time()
 print(f"Rascaline took {finish_time-start_time} s")
 
-#print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
+# print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
