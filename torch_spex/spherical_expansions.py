@@ -165,7 +165,7 @@ def get_cartesian_vectors(structures, cutoff_radius):
         where_selected_structure = np.where(structures.structure_indices == structure_index)[0]
 
         centers, neighbors, unit_cell_shift_vectors = get_neighbor_list(
-            structures.positions.detach().cpu().clone().numpy()[where_selected_structure], 
+            structures.positions.detach().cpu().numpy()[where_selected_structure], 
             structures.pbcs[structure_index], 
             structures.cells[structure_index], 
             cutoff_radius) 

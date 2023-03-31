@@ -39,7 +39,7 @@ force_conversion = "KCAL_MOL_TO_MEV"
 target_key = "energy"
 dataset_path = "../datasets/rmd17/ethanol1.extxyz"
 do_forces = True
-force_weight = 0.02
+force_weight = 0.1 #0.02
 n_test = 200
 n_train = 50
 r_cut = 6.0
@@ -49,6 +49,7 @@ np.random.seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+# device = "cpu"
 print(f"Training on {device}")
 
 conversions = get_conversions()
@@ -65,15 +66,11 @@ else:
 
 train_structures, test_structures = get_dataset_slices(dataset_path, train_slice, test_slice)
 
-n_max_rs = [16]
-
-print(f"n_max_rs is {n_max_rs}")
-
 hypers = {
     "cutoff radius": r_cut,
     "radial basis": {
         "r_cut": r_cut,
-        "E_max": 200 
+        "E_max": 400
     }
 }
 
@@ -87,7 +84,6 @@ class Model(torch.nn.Module):
         super().__init__()
         self.all_species = all_species
         self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species, device=device)
-        self.additive = torch.nn.Parameter(torch.tensor([0.0]))
         self.ps_calculator = PowerSpectrum(all_species)
         n_max = self.spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.n_max_l
         l_max = len(n_max) - 1
@@ -103,6 +99,8 @@ class Model(torch.nn.Module):
                 torch.nn.Tanh(),
                 torch.nn.Linear(128, 128),
                 torch.nn.Tanh(),
+                torch.nn.Linear(128, 128),
+                torch.nn.Tanh(),
                 torch.nn.Linear(128, 1)
             ) for a_i in self.all_species
         })
@@ -111,22 +109,22 @@ class Model(torch.nn.Module):
 
     def forward(self, structures, is_training=True):
 
-        #print("Transforming structures")
+        # print("Transforming structures")
         structures = Structures(structures)
         structures.to(device)
         energies = torch.zeros((structures.n_structures,), device=device, dtype=torch.get_default_dtype())
-        energies += self.additive
 
         if self.do_forces:
             structures.positions.requires_grad = True
 
+        # print("Calculating spherical expansion")
         spherical_expansion = self.spherical_expansion_calculator(structures)
         ps = self.ps_calculator(spherical_expansion)
 
-        #print("Calculating energies")
+        # print("Calculating energies")
         self._apply_layer(energies, ps, self.nu2_model)
 
-        #print("Computing forces by backpropagation")
+        # print("Computing forces by backpropagation")
         if self.do_forces:
             forces = compute_forces(energies, structures.positions, is_training=is_training)
         else:
@@ -142,8 +140,8 @@ class Model(torch.nn.Module):
                 #print(i)
                 optimizer.zero_grad()
                 predicted_energies, predicted_forces = model(batch)
-                energies = torch.tensor([structure.info[target_key] for structure in batch])*energy_conversion_factor - avg
-                energies = energies.to(device)
+                energies = torch.tensor([structure.info[target_key] for structure in batch])*energy_conversion_factor 
+                energies = energies.to(device) - avg
                 loss = get_sse(predicted_energies, energies)
                 if do_forces:
                     forces = torch.tensor(np.concatenate([structure.get_forces() for structure in batch], axis=0))*force_conversion_factor
@@ -157,8 +155,8 @@ class Model(torch.nn.Module):
                 optimizer.zero_grad()
                 for train_structures in data_loader:
                     predicted_energies, predicted_forces = model(train_structures)
-                    energies = torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor - avg
-                    energies = energies.to(device)
+                    energies = torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor
+                    energies = energies.to(device) - avg
                     loss = get_sse(predicted_energies, energies)
                     if do_forces:
                         forces = torch.tensor(np.concatenate([structure.get_forces() for structure in train_structures], axis=0))*force_conversion_factor
@@ -195,22 +193,23 @@ model = Model(hypers, all_species, do_forces=do_forces).to(device)
 
 if optimizer_name == "Adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3) 
-    batch_size = 10
+    batch_size = 16
 else:
-    optimizer = torch.optim.LBFGS(model.parameters())
+    optimizer = torch.optim.LBFGS(model.parameters(), lr=1e-2)
     batch_size = n_train
 
 data_loader = torch.utils.data.DataLoader(train_structures, batch_size=batch_size, shuffle=True, collate_fn=(lambda x: x))
 
-avg = torch.mean(torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor)
-
-
-predicted_train_energies, predicted_train_forces = model(train_structures, is_training=False)
+with torch.autograd.set_detect_anomaly(True):
+    predicted_train_energies, predicted_train_forces = model(train_structures, is_training=False)
 predicted_test_energies, predicted_test_forces = model(test_structures, is_training=False)
-train_energies = torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor - avg
+train_energies = torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor
 train_energies = train_energies.to(device)
-test_energies = torch.tensor([structure.info[target_key] for structure in test_structures])*energy_conversion_factor - avg
+test_energies = torch.tensor([structure.info[target_key] for structure in test_structures])*energy_conversion_factor
 test_energies = test_energies.to(device)
+avg = torch.mean(train_energies)
+train_energies -= avg
+test_energies -= avg
 if do_forces:
     train_forces = torch.tensor(np.concatenate([structure.get_forces() for structure in train_structures], axis=0))*force_conversion_factor
     train_forces = train_forces.to(device)
@@ -232,15 +231,6 @@ for epoch in range(1000):
 
     predicted_train_energies, predicted_train_forces = model(train_structures, is_training=False)
     predicted_test_energies, predicted_test_forces = model(test_structures, is_training=False)
-    train_energies = torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor - avg
-    train_energies = train_energies.to(device)
-    test_energies = torch.tensor([structure.info[target_key] for structure in test_structures])*energy_conversion_factor - avg
-    test_energies = test_energies.to(device)
-    if do_forces:
-        train_forces = torch.tensor(np.concatenate([structure.get_forces() for structure in train_structures], axis=0))*force_conversion_factor
-        train_forces = train_forces.to(device)
-        test_forces = torch.tensor(np.concatenate([structure.get_forces() for structure in test_structures], axis=0))*force_conversion_factor
-        test_forces = test_forces.to(device)
 
     print()
     print(f"Epoch number {epoch}, Total loss: {total_loss}")

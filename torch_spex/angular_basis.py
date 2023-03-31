@@ -55,8 +55,8 @@ def spherical_harmonics(l_max: int, x, y, z, r):
     c[:, 0] = 1.0
     s[:, 0] = 0.0
     for m in range(1, l_max+1):
-        c[:, m] = c[:, m-1]*x - s[:, m-1]*y
-        s[:, m] = s[:, m-1]*x + c[:, m-1]*y
+        c[:, m] = c[:, m-1].clone()*x - s[:, m-1].clone()*y
+        s[:, m] = s[:, m-1].clone()*x + c[:, m-1].clone()*y
     Phi = torch.cat([
         s[:, 1:].flip(dims=[1]),
         one_over_sqrt_2*torch.ones((r.shape[0], 1), device=r.device, dtype=r.dtype),
