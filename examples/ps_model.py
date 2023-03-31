@@ -39,10 +39,10 @@ force_conversion = "KCAL_MOL_TO_MEV"
 target_key = "energy"
 dataset_path = "../datasets/rmd17/ethanol1.extxyz"
 do_forces = True
-force_weight = 0.1 #0.02
-n_test = 200
-n_train = 50
-r_cut = 6.0
+force_weight = 0.01
+n_test = 1000
+n_train = 1000
+r_cut = 4.0
 optimizer_name = "Adam"
 
 np.random.seed(random_seed)
@@ -70,7 +70,7 @@ hypers = {
     "cutoff radius": r_cut,
     "radial basis": {
         "r_cut": r_cut,
-        "E_max": 400
+        "E_max": 200
     }
 }
 
@@ -95,13 +95,13 @@ class Model(torch.nn.Module):
         """
         self.nu2_model = torch.nn.ModuleDict({
             str(a_i): torch.nn.Sequential(
-                torch.nn.Linear(n_feat, 128),
-                torch.nn.Tanh(),
-                torch.nn.Linear(128, 128),
-                torch.nn.Tanh(),
-                torch.nn.Linear(128, 128),
-                torch.nn.Tanh(),
-                torch.nn.Linear(128, 1)
+                torch.nn.Linear(n_feat, 256),
+                torch.nn.SiLU(),
+                torch.nn.Linear(256, 256),
+                torch.nn.SiLU(),
+                torch.nn.Linear(256, 256),
+                torch.nn.SiLU(),
+                torch.nn.Linear(256, 1)
             ) for a_i in self.all_species
         })
         # """
