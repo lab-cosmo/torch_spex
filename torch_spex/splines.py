@@ -149,11 +149,11 @@ class DynamicSpliner:
         h01 = -2.0 * t_3 + 3.0 * t_2
         h11 = t_3 - t_2
 
-        p_k = self.spline_values[n]
-        p_k_1 = self.spline_values[n + 1]
+        p_k = torch.index_select(self.spline_values, dim=0, index=n)
+        p_k_1 = torch.index_select(self.spline_values, dim=0, index=n+1)
 
-        m_k = self.spline_derivatives[n]
-        m_k_1 = self.spline_derivatives[n + 1]
+        m_k = torch.index_select(self.spline_derivatives, dim=0, index=n)
+        m_k_1 = torch.index_select(self.spline_derivatives, dim=0, index=n+1)
 
         new_shape = (-1,) + (1,) * self.number_of_custom_dimensions
         h00 = h00.reshape(new_shape)
@@ -161,8 +161,6 @@ class DynamicSpliner:
         h01 = h01.reshape(new_shape)
         h11 = h11.reshape(new_shape)
 
-        interpolated_values = (
-            h00 * p_k + h10 * delta_x * m_k + h01 * p_k_1 + h11 * delta_x * m_k_1
-        )
+        interpolated_values = h00 * p_k + h10 * delta_x * m_k + h01 * p_k_1 + h11 * delta_x * m_k_1
 
         return interpolated_values
