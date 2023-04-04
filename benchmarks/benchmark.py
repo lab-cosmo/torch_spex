@@ -35,7 +35,7 @@ from torch.profiler import profile
 
 start_time = time.time()
 if True: #with profile() as prof:
-    for _ in range(1000):
+    for _ in range(100):
         spherical_expansion_coefficients_torch_spex = calculator(transformed_structures)
 finish_time = time.time()
 print(f"torch_spex took {finish_time-start_time} s")
@@ -128,9 +128,9 @@ hypers_rascaline = {
 calculator = rascaline.SphericalExpansion(**hypers_rascaline)
 
 start_time = time.time()
-for _ in range(1000):
+for _ in range(100):
     spherical_expansion_coefficients_rascaline = calculator.compute(structures)
 finish_time = time.time()
 print(f"Rascaline took {finish_time-start_time} s")
 
-# print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
+print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
