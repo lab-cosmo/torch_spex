@@ -14,7 +14,7 @@ class SphericalExpansion(torch.nn.Module):
         super().__init__()
 
         self.hypers = hypers
-        self.all_species = all_species
+        self.all_species = np.array(all_species, dtype=np.int32)  # convert potential list to np.array
         self.vector_expansion_calculator = VectorExpansion(hypers, device=device)
 
     def forward(self, structures):
@@ -55,9 +55,12 @@ class SphericalExpansion(torch.nn.Module):
         blocks = []
         for l in range(l_max+1):
             densities_l = densities[l]
+            vectors_l_block = expanded_vectors.block(l=l)
+            vectors_l_block_components = vectors_l_block.components
+            vectors_l_block_n = vectors_l_block.properties["n"]
             for a_i in self.all_species:
-                where_ai = np.where(ai_new_indices == a_i)[0]
-                densities_ai_l = densities_l[where_ai]
+                where_ai = torch.LongTensor(np.where(ai_new_indices == a_i)[0]).to(densities_l.device)
+                densities_ai_l = torch.index_select(densities_l, 0, where_ai)
                 labels.append([a_i, l, 1])
                 blocks.append(
                     TensorBlock(
@@ -66,16 +69,16 @@ class SphericalExpansion(torch.nn.Module):
                             names = ["structure", "center"],
                             values = unique_s_i_indices[where_ai]
                         ),
-                        components = expanded_vectors.block(l=l).components,
+                        components = vectors_l_block_components,
                         properties = Labels(
                             names = ["a1", "n1", "l1"],
-                            values = np.concatenate(
-                                [np.stack([
-                                    a_j*np.ones_like(expanded_vectors.block(l=l).properties["n"]), 
-                                    expanded_vectors.block(l=l).properties["n"],
-                                    l*np.ones_like(expanded_vectors.block(l=l).properties["n"])
-                                ], axis=1) for a_j in self.all_species],
-                                axis = 0
+                            values = np.stack(
+                                [
+                                    np.repeat(self.all_species, vectors_l_block_n.shape[0]),
+                                    np.tile(vectors_l_block_n, self.all_species.shape[0]),
+                                    l*np.ones((densities_ai_l.shape[2],), dtype=np.int32)
+                                ], 
+                                axis=1
                             )
                         )
                     )

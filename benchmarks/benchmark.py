@@ -12,6 +12,7 @@ from torch_spex.spherical_expansions import SphericalExpansion
 from torch_spex.structures import Structures
 
 device = "cpu"
+print(f"Running on {device}")
 
 torch.set_default_dtype(torch.float64)
 

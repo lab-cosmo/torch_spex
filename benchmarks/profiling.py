@@ -9,6 +9,7 @@ from torch_spex.structures import Structures
 import cProfile
 
 device = "cpu"
+print(f"Running on {device}")
 
 torch.set_default_dtype(torch.float64)
 
@@ -37,7 +38,7 @@ cProfile.runctx('run()', globals(), {'run': run}, 'profile')
 
 import pstats
 stats = pstats.Stats('profile')
-stats.strip_dirs().sort_stats('tottime').print_stats(30)
+stats.strip_dirs().sort_stats('tottime').print_stats(100)
 
 import os
 os.remove('profile')
