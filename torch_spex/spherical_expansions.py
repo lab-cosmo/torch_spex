@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import ase
 from ase.neighborlist import primitive_neighbor_list
+import equistore
 from equistore import TensorMap, Labels, TensorBlock
 
 from .angular_basis import AngularBasis
@@ -17,72 +18,151 @@ class SphericalExpansion(torch.nn.Module):
         self.all_species = np.array(all_species, dtype=np.int32)  # convert potential list to np.array
         self.vector_expansion_calculator = VectorExpansion(hypers, device=device)
 
+        if "alchemical" in self.hypers:
+            self.is_alchemical = True
+            self.all_species_labels = Labels(
+                names = ["species_neighbor"],
+                values = all_species[:, None]
+            )
+            self.n_pseudo_species = self.hypers["alchemical"]
+            self.combination_matrix = torch.nn.Linear(all_species.shape[0], self.n_pseudo_species, bias=False)
+        else:
+            self.is_alchemical = False
+
     def forward(self, structures):
         
         expanded_vectors = self.vector_expansion_calculator(structures)
         samples_metadata = expanded_vectors.block(l=0).samples
 
-        s_metadata = samples_metadata["structure"]
-        i_metadata = samples_metadata["center"]
-        ai_metadata = samples_metadata["species_center"]
-        aj_metadata = samples_metadata["species_neighbor"]
+        if self.is_alchemical:
 
-        n_species = len(self.all_species)
-        species_to_index = {atomic_number : i_species for i_species, atomic_number in enumerate(self.all_species)}
+            s_metadata = samples_metadata["structure"]
+            i_metadata = samples_metadata["center"]
+            ai_metadata = samples_metadata["species_center"]
+            one_hot_aj = torch.tensor(equistore.one_hot(samples_metadata, self.all_species_labels))
+            pseudo_species_weights = self.combination_matrix(one_hot_aj)
 
-        s_i_metadata = np.stack([s_metadata, i_metadata], axis=-1)
-        unique_s_i_indices, s_i_unique_to_metadata, s_i_metadata_to_unique = np.unique(s_i_metadata, axis=0, return_index=True, return_inverse=True)
+            n_species = len(self.all_species)
+            species_to_index = {atomic_number : i_species for i_species, atomic_number in enumerate(self.all_species)}
 
-        aj_shifts = np.array([species_to_index[aj_index] for aj_index in aj_metadata])
-        density_indices = torch.LongTensor(s_i_metadata_to_unique*n_species+aj_shifts)
+            s_i_metadata = np.stack([s_metadata, i_metadata], axis=-1)
+            unique_s_i_indices, s_i_unique_to_metadata, s_i_metadata_to_unique = np.unique(s_i_metadata, axis=0, return_index=True, return_inverse=True)
 
-        l_max = self.vector_expansion_calculator.l_max
-        n_centers = len(unique_s_i_indices)
-        densities = []
-        for l in range(l_max+1):
-            expanded_vectors_l = expanded_vectors.block(l=l).values
-            densities_l = torch.zeros(
-                (n_centers*n_species, expanded_vectors_l.shape[1], expanded_vectors_l.shape[2]), 
-                dtype = torch.get_default_dtype(),
-                device = expanded_vectors_l.device
-            )
-            densities_l.index_add_(dim=0, index=density_indices.to(expanded_vectors_l.device), source=expanded_vectors_l)
-            densities_l = densities_l.reshape((n_centers, n_species, 2*l+1, -1)).swapaxes(1, 2).reshape((n_centers, 2*l+1, -1))
-            densities.append(densities_l)
+            l_max = self.vector_expansion_calculator.l_max
+            n_centers = len(unique_s_i_indices)
+            density_indices = torch.LongTensor(s_i_metadata_to_unique)
+            densities = []
+            for l in range(l_max+1):
+                expanded_vectors_l = expanded_vectors.block(l=l).values
+                expanded_vectors_l_pseudo = torch.einsum(
+                    "abc, ad -> abcd", expanded_vectors_l, pseudo_species_weights
+                )
+                densities_l = torch.zeros(
+                    (n_centers, expanded_vectors_l.shape[1], expanded_vectors_l.shape[2], self.n_pseudo_species),
+                    dtype = torch.get_default_dtype(),
+                    device = expanded_vectors_l.device
+                )
+                densities_l.index_add_(dim=0, index=density_indices.to(expanded_vectors_l.device), source=expanded_vectors_l_pseudo)
+                densities_l = densities_l.reshape((n_centers, 2*l+1, -1, self.n_pseudo_species)).swapaxes(2, 3).reshape((n_centers, 2*l+1, -1))
+                densities.append(densities_l)
 
-        ai_new_indices = torch.tensor(ai_metadata[s_i_unique_to_metadata])
-        labels = []
-        blocks = []
-        for l in range(l_max+1):
-            densities_l = densities[l]
-            vectors_l_block = expanded_vectors.block(l=l)
-            vectors_l_block_components = vectors_l_block.components
-            vectors_l_block_n = vectors_l_block.properties["n"]
-            for a_i in self.all_species:
-                where_ai = torch.LongTensor(np.where(ai_new_indices == a_i)[0]).to(densities_l.device)
-                densities_ai_l = torch.index_select(densities_l, 0, where_ai)
-                labels.append([a_i, l, 1])
-                blocks.append(
-                    TensorBlock(
-                        values = densities_ai_l,
-                        samples = Labels(
-                            names = ["structure", "center"],
-                            values = unique_s_i_indices[where_ai]
-                        ),
-                        components = vectors_l_block_components,
-                        properties = Labels(
-                            names = ["a1", "n1", "l1"],
-                            values = np.stack(
-                                [
-                                    np.repeat(self.all_species, vectors_l_block_n.shape[0]),
-                                    np.tile(vectors_l_block_n, self.all_species.shape[0]),
-                                    l*np.ones((densities_ai_l.shape[2],), dtype=np.int32)
-                                ], 
-                                axis=1
+            ai_new_indices = torch.tensor(ai_metadata[s_i_unique_to_metadata])
+            labels = []
+            blocks = []
+            for l in range(l_max+1):
+                densities_l = densities[l]
+                vectors_l_block = expanded_vectors.block(l=l)
+                vectors_l_block_components = vectors_l_block.components
+                vectors_l_block_n = vectors_l_block.properties["n"]
+                for a_i in self.all_species:
+                    where_ai = torch.LongTensor(np.where(ai_new_indices == a_i)[0]).to(densities_l.device)
+                    densities_ai_l = torch.index_select(densities_l, 0, where_ai)
+                    labels.append([a_i, l, 1])
+                    blocks.append(
+                        TensorBlock(
+                            values = densities_ai_l,
+                            samples = Labels(
+                                names = ["structure", "center"],
+                                values = unique_s_i_indices[where_ai.cpu().numpy()]
+                            ),
+                            components = vectors_l_block_components,
+                            properties = Labels(
+                                names = ["a1", "n1", "l1"],
+                                values = np.stack(
+                                    [
+                                        np.repeat(-np.arange(self.n_pseudo_species), vectors_l_block_n.shape[0]),
+                                        np.tile(vectors_l_block_n, self.n_pseudo_species),
+                                        l*np.ones((densities_ai_l.shape[2],), dtype=np.int32)
+                                    ], 
+                                    axis=1
+                                )
                             )
                         )
                     )
+
+        else:
+
+            s_metadata = samples_metadata["structure"]
+            i_metadata = samples_metadata["center"]
+            ai_metadata = samples_metadata["species_center"]
+            aj_metadata = samples_metadata["species_neighbor"]
+
+            n_species = len(self.all_species)
+            species_to_index = {atomic_number : i_species for i_species, atomic_number in enumerate(self.all_species)}
+
+            s_i_metadata = np.stack([s_metadata, i_metadata], axis=-1)
+            unique_s_i_indices, s_i_unique_to_metadata, s_i_metadata_to_unique = np.unique(s_i_metadata, axis=0, return_index=True, return_inverse=True)
+
+            aj_shifts = np.array([species_to_index[aj_index] for aj_index in aj_metadata])
+            density_indices = torch.LongTensor(s_i_metadata_to_unique*n_species+aj_shifts)
+
+            l_max = self.vector_expansion_calculator.l_max
+            n_centers = len(unique_s_i_indices)
+            densities = []
+            for l in range(l_max+1):
+                expanded_vectors_l = expanded_vectors.block(l=l).values
+                densities_l = torch.zeros(
+                    (n_centers*n_species, expanded_vectors_l.shape[1], expanded_vectors_l.shape[2]), 
+                    dtype = torch.get_default_dtype(),
+                    device = expanded_vectors_l.device
                 )
+                densities_l.index_add_(dim=0, index=density_indices.to(expanded_vectors_l.device), source=expanded_vectors_l)
+                densities_l = densities_l.reshape((n_centers, n_species, 2*l+1, -1)).swapaxes(1, 2).reshape((n_centers, 2*l+1, -1))
+                densities.append(densities_l)
+
+            ai_new_indices = torch.tensor(ai_metadata[s_i_unique_to_metadata])
+            labels = []
+            blocks = []
+            for l in range(l_max+1):
+                densities_l = densities[l]
+                vectors_l_block = expanded_vectors.block(l=l)
+                vectors_l_block_components = vectors_l_block.components
+                vectors_l_block_n = vectors_l_block.properties["n"]
+                for a_i in self.all_species:
+                    where_ai = torch.LongTensor(np.where(ai_new_indices == a_i)[0]).to(densities_l.device)
+                    densities_ai_l = torch.index_select(densities_l, 0, where_ai)
+                    labels.append([a_i, l, 1])
+                    blocks.append(
+                        TensorBlock(
+                            values = densities_ai_l,
+                            samples = Labels(
+                                names = ["structure", "center"],
+                                values = unique_s_i_indices[where_ai]
+                            ),
+                            components = vectors_l_block_components,
+                            properties = Labels(
+                                names = ["a1", "n1", "l1"],
+                                values = np.stack(
+                                    [
+                                        np.repeat(self.all_species, vectors_l_block_n.shape[0]),
+                                        np.tile(vectors_l_block_n, self.all_species.shape[0]),
+                                        l*np.ones((densities_ai_l.shape[2],), dtype=np.int32)
+                                    ], 
+                                    axis=1
+                                )
+                            )
+                        )
+                    )
 
         spherical_expansion = TensorMap(
             keys = Labels(
@@ -181,11 +261,15 @@ def get_cartesian_vectors(structures, cutoff_radius):
         vectors.append(structure_vectors)
         labels.append(
             np.stack([
-            np.array([structure_index]*len(centers)), 
-            centers.numpy(), 
-            neighbors.numpy(), 
-            species[centers], 
-            species[neighbors]], axis=-1))
+                np.array([structure_index]*len(centers)), 
+                centers.numpy(), 
+                neighbors.numpy(), 
+                species[centers], 
+                species[neighbors],
+                unit_cell_shift_vectors[:, 0],
+                unit_cell_shift_vectors[:, 1],
+                unit_cell_shift_vectors[:, 2]
+            ], axis=-1))
 
     vectors = torch.cat(vectors, dim=0)
     labels = np.concatenate(labels, axis=0)
@@ -193,7 +277,7 @@ def get_cartesian_vectors(structures, cutoff_radius):
     block = TensorBlock(
         values = vectors.unsqueeze(dim=-1),
         samples = Labels(
-            names = ["structure", "center", "neighbor", "species_center", "species_neighbor"],
+            names = ["structure", "center", "neighbor", "species_center", "species_neighbor", "cell_x", "cell_y", "cell_z"],
             values = np.array(labels, dtype=np.int32)
         ),
         components = [

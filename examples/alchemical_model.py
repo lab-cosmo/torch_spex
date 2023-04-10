@@ -38,9 +38,9 @@ energy_conversion = "KCAL_MOL_TO_MEV"
 force_conversion = "KCAL_MOL_TO_MEV"
 target_key = "energy"
 dataset_path = "../datasets/alchemical.xyz"
-do_forces = False
+do_forces = True
 force_weight = 0.01
-n_test = 1000
+n_test = 100
 n_train = 1000
 r_cut = 4.0
 optimizer_name = "Adam"
@@ -49,7 +49,6 @@ np.random.seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-# device = "cpu"
 print(f"Training on {device}")
 
 conversions = get_conversions()
@@ -66,7 +65,9 @@ else:
 
 train_structures, test_structures = get_dataset_slices(dataset_path, train_slice, test_slice)
 
+n_pseudo = 4
 hypers = {
+    "alchemical": n_pseudo,
     "cutoff radius": r_cut,
     "radial basis": {
         "r_cut": r_cut,
@@ -87,7 +88,7 @@ class Model(torch.nn.Module):
         self.ps_calculator = PowerSpectrum(all_species)
         n_max = self.spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.n_max_l
         l_max = len(n_max) - 1
-        n_feat = sum([n_max[l]**2 * len(all_species)**2 for l in range(l_max+1)])
+        n_feat = sum([n_max[l]**2 * n_pseudo**2 for l in range(l_max+1)])
         """
         self.nu2_model = torch.nn.ModuleDict({
             str(a_i): torch.nn.Linear(n_feat, 1, bias=False) for a_i in self.all_species
@@ -141,7 +142,12 @@ class Model(torch.nn.Module):
                 optimizer.zero_grad()
                 predicted_energies, predicted_forces = model(batch)
                 energies = torch.tensor([structure.info[target_key] for structure in batch])*energy_conversion_factor 
-                energies = energies.to(device) - avg
+
+                comp = comp_calculator.compute(batch)
+                comp = comp.keys_to_properties(center_species_labels)
+                comp = torch.tensor(comp.block().values).to(device)
+                energies -= comp @ c_comp
+
                 loss = get_sse(predicted_energies, energies)
                 if do_forces:
                     forces = torch.tensor(np.concatenate([structure.get_forces() for structure in batch], axis=0))*force_conversion_factor
@@ -156,7 +162,12 @@ class Model(torch.nn.Module):
                 for train_structures in data_loader:
                     predicted_energies, predicted_forces = model(train_structures)
                     energies = torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor
-                    energies = energies.to(device) - avg
+                    
+                    comp = comp_calculator.compute(train_structures)
+                    comp = comp.keys_to_properties(center_species_labels)
+                    comp = torch.tensor(comp.block().values).to(device)
+                    energies -= comp @ c_comp
+
                     loss = get_sse(predicted_energies, energies)
                     if do_forces:
                         forces = torch.tensor(np.concatenate([structure.get_forces() for structure in train_structures], axis=0))*force_conversion_factor
@@ -195,7 +206,7 @@ if optimizer_name == "Adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3) 
     batch_size = 16
 else:
-    optimizer = torch.optim.LBFGS(model.parameters(), lr=1e-2)
+    optimizer = torch.optim.LBFGS(model.parameters(), lr=0.1)
     batch_size = n_train
 
 data_loader = torch.utils.data.DataLoader(train_structures, batch_size=batch_size, shuffle=True, collate_fn=(lambda x: x))
@@ -207,9 +218,28 @@ train_energies = torch.tensor([structure.info[target_key] for structure in train
 train_energies = train_energies.to(device)
 test_energies = torch.tensor([structure.info[target_key] for structure in test_structures])*energy_conversion_factor
 test_energies = test_energies.to(device)
-avg = torch.mean(train_energies)
-train_energies -= avg
-test_energies -= avg
+
+# Linear fit for one-body energies:
+import rascaline
+import equistore
+center_species_labels = equistore.Labels(
+    names = ["species_center"],
+    values = np.array(all_species).reshape(-1, 1)
+)
+comp_calculator = rascaline.AtomicComposition(per_structure=True)
+train_comp = comp_calculator.compute(train_structures)
+train_comp = train_comp.keys_to_properties(center_species_labels)
+train_comp = torch.tensor(train_comp.block().values).to(device)
+
+c_comp = torch.linalg.solve(train_comp.T @ train_comp, train_comp.T @ train_energies)
+
+test_comp = comp_calculator.compute(test_structures)
+test_comp = test_comp.keys_to_properties(center_species_labels)
+test_comp = torch.tensor(test_comp.block().values).to(device)
+
+train_energies -= train_comp @ c_comp
+test_energies -= test_comp @ c_comp
+
 if do_forces:
     train_forces = torch.tensor(np.concatenate([structure.get_forces() for structure in train_structures], axis=0))*force_conversion_factor
     train_forces = train_forces.to(device)
@@ -221,6 +251,15 @@ print(f"Energy errors: Train RMSE: {get_rmse(predicted_train_energies, train_ene
 if do_forces:
     print(f"Force errors: Train RMSE: {get_rmse(predicted_train_forces, train_forces)}, Train MAE: {get_mae(predicted_train_forces, train_forces)}, Test RMSE: {get_rmse(predicted_test_forces, test_forces)}, Test MAE: {get_mae(predicted_test_forces, test_forces)}")
 
+"""import cProfile
+cProfile.runctx('model.train_epoch(data_loader, force_weight)', globals(), locals(), 'profile')
+
+import pstats
+stats = pstats.Stats('profile')
+stats.strip_dirs().sort_stats('tottime').print_stats(100)
+
+import os
+os.remove('profile')"""
 
 for epoch in range(1000):
 
