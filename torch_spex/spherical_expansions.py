@@ -39,7 +39,11 @@ class SphericalExpansion(torch.nn.Module):
             s_metadata = samples_metadata["structure"]
             i_metadata = samples_metadata["center"]
             ai_metadata = samples_metadata["species_center"]
-            one_hot_aj = torch.tensor(equistore.one_hot(samples_metadata, self.all_species_labels))
+            one_hot_aj = torch.tensor(
+                equistore.one_hot(samples_metadata, self.all_species_labels),
+                dtype = torch.get_default_dtype(),
+                device = expanded_vectors.block(l=0).values.device
+            )
             pseudo_species_weights = self.combination_matrix(one_hot_aj)
 
             n_species = len(self.all_species)
@@ -147,7 +151,7 @@ class SphericalExpansion(torch.nn.Module):
                             values = densities_ai_l,
                             samples = Labels(
                                 names = ["structure", "center"],
-                                values = unique_s_i_indices[where_ai]
+                                values = unique_s_i_indices[where_ai.cpu().numpy()]
                             ),
                             components = vectors_l_block_components,
                             properties = Labels(
@@ -199,12 +203,8 @@ class VectorExpansion(torch.nn.Module):
             .sum(dim=-1)
         )
         radial_basis = self.radial_basis_calculator(r)
-        
-        x = bare_cartesian_vectors[:, 0]
-        y = bare_cartesian_vectors[:, 1]
-        z = bare_cartesian_vectors[:, 2]
 
-        spherical_harmonics = self.spherical_harmonics_calculator(x, y, z, r)
+        spherical_harmonics = self.spherical_harmonics_calculator(bare_cartesian_vectors)
 
         # Use broadcasting semantics to get the products in equistore shape
         vector_expansion_blocks = []

@@ -16,6 +16,7 @@ def get_conversions():
     conversions["EV_TO_KCAL_MOL"] = conversions["HARTREE_TO_KCAL_MOL"]/conversions["HARTREE_TO_EV"]
     conversions["KCAL_MOL_TO_MEV"] = 0.0433641153087705*1000.0
     conversions["METHANE_FORCE"] = conversions["HARTREE_TO_KCAL_MOL"]/0.529177
+    conversions["NO_CONVERSION"] = 1.0
 
     return conversions
 
@@ -34,12 +35,12 @@ torch.set_default_dtype(torch.float64)
 
 # Unpack options
 random_seed = 123123
-energy_conversion = "KCAL_MOL_TO_MEV"
-force_conversion = "KCAL_MOL_TO_MEV"
+energy_conversion = "NO_CONVERSION"
+force_conversion = "NO_CONVERSION"
 target_key = "energy"
 dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
-force_weight = 0.01
+force_weight = 1.0
 n_test = 100
 n_train = 1000
 r_cut = 4.0
@@ -141,7 +142,7 @@ class Model(torch.nn.Module):
                 #print(i)
                 optimizer.zero_grad()
                 predicted_energies, predicted_forces = model(batch)
-                energies = torch.tensor([structure.info[target_key] for structure in batch])*energy_conversion_factor 
+                energies = torch.tensor([structure.info[target_key] for structure in batch], device=device)*energy_conversion_factor 
 
                 comp = comp_calculator.compute(batch)
                 comp = comp.keys_to_properties(center_species_labels)
@@ -161,7 +162,7 @@ class Model(torch.nn.Module):
                 optimizer.zero_grad()
                 for train_structures in data_loader:
                     predicted_energies, predicted_forces = model(train_structures)
-                    energies = torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor
+                    energies = torch.tensor([structure.info[target_key] for structure in train_structures], device=device)*energy_conversion_factor
                     
                     comp = comp_calculator.compute(train_structures)
                     comp = comp.keys_to_properties(center_species_labels)

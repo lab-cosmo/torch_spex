@@ -2,3 +2,5 @@
 pycache/
 build/
 *.pyc
+*.sh
+*.out
