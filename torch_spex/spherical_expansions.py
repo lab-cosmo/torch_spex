@@ -63,7 +63,7 @@ class SphericalExpansion(torch.nn.Module):
                 )
                 densities_l = torch.zeros(
                     (n_centers, expanded_vectors_l.shape[1], expanded_vectors_l.shape[2], self.n_pseudo_species),
-                    dtype = torch.get_default_dtype(),
+                    dtype = expanded_vectors_l.dtype,
                     device = expanded_vectors_l.device
                 )
                 densities_l.index_add_(dim=0, index=density_indices.to(expanded_vectors_l.device), source=expanded_vectors_l_pseudo)
@@ -127,7 +127,7 @@ class SphericalExpansion(torch.nn.Module):
                 expanded_vectors_l = expanded_vectors.block(l=l).values
                 densities_l = torch.zeros(
                     (n_centers*n_species, expanded_vectors_l.shape[1], expanded_vectors_l.shape[2]), 
-                    dtype = torch.get_default_dtype(),
+                    dtype = expanded_vectors_l.dtype,
                     device = expanded_vectors_l.device
                 )
                 densities_l.index_add_(dim=0, index=density_indices.to(expanded_vectors_l.device), source=expanded_vectors_l)
