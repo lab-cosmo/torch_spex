@@ -14,7 +14,7 @@ if HAS_NVIDIA:
     dependency_links = []
 else:
     dependency_links = ['https://download.pytorch.org/whl/cpu']
-    print("Did not find NVIDIA card defaulting to CPU-only installation")
+    print("torch_spex setup info: Did not find NVIDIA card defaulting to CPU-only installation")
 
 setup(
     name='torch_spex',
@@ -25,7 +25,7 @@ setup(
         'ase',
         'torch',
         'scipy',
-        'rascaline @ https://github.com/luthaf/rascaline/archive/equisolve.zip',
+        'equistore@git+https://github.com/lab-cosmo/equistore.git#2bdd1a6',
     ],
     dependency_links = dependency_links
 )
