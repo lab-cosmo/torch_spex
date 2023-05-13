@@ -1,6 +1,7 @@
 from torch_spex.spherical_expansions import VectorExpansion, SphericalExpansion
 from torch_spex.structures import Structures
 
+import torch
 import numpy as np
 import json
 import equistore
@@ -27,3 +28,15 @@ equistore.save("vector_expansion_coeffs-ethanol1_0-data.npz", vexp_coeffs)
 spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
 sexp_coeffs = spherical_expansion_calculator.forward(structures)
 equistore.save("spherical_expansion_coeffs-ethanol1_0-data.npz", sexp_coeffs)
+
+hypers["alchemical"] = 2
+with open("expansion_coeffs-ethanol1_0-alchemical-hypers.json", "w") as f:
+    json.dump(hypers, f)
+
+
+torch.manual_seed(0) # set for the combination_matrix in SphericalExpansion
+spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
+
+with torch.no_grad():
+    sexp_coeffs = spherical_expansion_calculator.forward(structures)
+equistore.save("spherical_expansion_coeffs-ethanol1_0-alchemical-seed0-data.npz", sexp_coeffs)
