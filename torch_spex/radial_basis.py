@@ -9,12 +9,10 @@ class RadialBasis(torch.nn.Module):
 
         self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"], device=device)
         self.l_max = len(self.n_max_l) - 1
-        self.radial_transform = (lambda x: x)
 
     def forward(self, r):
 
-        x = self.radial_transform(r)
-        radial_functions = self.spliner.compute(x)
+        radial_functions = self.spliner.compute(r)
 
         radial_basis = []
         index = 0
