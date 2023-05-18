@@ -8,35 +8,70 @@ from equistore import TensorMap, Labels, TensorBlock
 from .angular_basis import AngularBasis
 from .radial_basis import RadialBasis
 
+from .structures import Structures
+from typing import Dict, List
 
 class SphericalExpansion(torch.nn.Module):
     """
-    The spherical expansion coefficients summed over all neighbours
+    The spherical expansion coefficients summed over all neighbours.
 
     .. math::
 
-        c^{ai}_{nlm} = \sum_j c^{aji}_{nlm}
+         \sum_j c^{l}_{Aija_ia_j, m, n} = c^{l}_{Aia_ia_j, m, n}
+         --reorder--> c^{a_il}_{Ai, m, a_jn}
 
-    where a: species of neighbor i: central atom (center), n: radial channel corresponding
-    to n'th radial basis function, l: degree of spherical harmonics,
-    m: order of spherical harmonics
+    where:
+    - **A**: index atomic structure,
+    - **i**: index of central atom,
+    - **j**: index of neighbor atom,
+    - **a_i**: species of central atom,
+    - **a_j**: species of neighbor atom or pseudo species,
+    - **n**: radial channel corresponding to n'th radial basis function,
+    - **l**: degree of spherical harmonics,
+    - **m**: order of spherical harmonics
 
+    The indices of the coefficients are written to show the storage in an
+    equistore.TensorMap object
 
-    where :math:`X` is the training data, :math:`y` the target data and :math:`α` is the
-    regularization strength.
+    .. math::
 
-    :param output_order:
-        Determines the order of dimension in the output array. Depending on the
-        next task the order:
-structure', 'center', 'neighbor', 'species_center', 'species_neighbor
-        - **"angular"**: [l, structure, center,
-        - **"angular-species"**:
+         c^{keys}_{samples, components, properties}
 
-    :param use_equistore:
-        Determines if it the output torch array should be wrapped by an equistore TensorMap that contains additional medata information not evident from the dimensions
+    :param hypers:
+        - **cutoff radius**: cutoff for the neighborlist
+        - **radial basis**: smooth basis optimizing Rayleight quotients [lle]_
+          - **r_cut** TODO
+          - **E_max** energy cutoff for the eigenvalues of the eigenstates
+        - **alchemical**: number of pseudo species to reduce the species channels to
+
+    .. [lle]
+        Bigi, Filippo, et al. "A smooth basis for atomistic machine learning."
+        The Journal of Chemical Physics 157.23 (2022): 234101.
+        https://doi.org/10.1063/5.0124363
+
+    >>> import numpy as np
+    >>> from ase.build import molecule
+    >>> from torch_spex.structures import Structures
+    >>> from torch_spex.spherical_expansions import SphericalExpansion
+    >>> hypers = {
+    ...     "cutoff radius": 3,
+    ...     "radial basis": {
+    ...         "r_cut": 3,
+    ...         "E_max": 20
+    ...     },
+    ...     "alchemical": 1,
+    ... }
+    >>> h2o = molecule("H2O")
+    >>> spherical_expansion = SphericalExpansion(hypers, [1,8], device="cpu")
+    >>> spherical_expansion.forward(Structures([h2o]))
+    TensorMap with 2 blocks
+    keys: ['a_i' 'lam' 'sigma']
+             1     0      1
+             8     0      1
+
     """
 
-    def __init__(self, hypers, all_species, device="cpu") -> None:
+    def __init__(self, hypers: Dict, all_species: List[int], device: str ="cpu") -> None:
         super().__init__()
 
         self.hypers = hypers
@@ -47,14 +82,14 @@ structure', 'center', 'neighbor', 'species_center', 'species_neighbor
             self.is_alchemical = True
             self.all_species_labels = Labels(
                 names = ["species_neighbor"],
-                values = all_species[:, None]
+                values = self.all_species[:, None]
             )
             self.n_pseudo_species = self.hypers["alchemical"]
-            self.combination_matrix = torch.nn.Linear(all_species.shape[0], self.n_pseudo_species, bias=False)
+            self.combination_matrix = torch.nn.Linear(self.all_species.shape[0], self.n_pseudo_species, bias=False)
         else:
             self.is_alchemical = False
 
-    def forward(self, structures):
+    def forward(self, structures: Structures):
 
         expanded_vectors = self.vector_expansion_calculator(structures)
         samples_metadata = expanded_vectors.block(l=0).samples
@@ -71,7 +106,6 @@ structure', 'center', 'neighbor', 'species_center', 'species_neighbor
 
         l_max = self.vector_expansion_calculator.l_max
         n_centers = len(unique_s_i_indices)
-
 
         densities = []
         if self.is_alchemical:
@@ -167,30 +201,28 @@ class VectorExpansion(torch.nn.Module):
 
     .. math::
 
-        c^{aAij}_{nlm}
+        c^{l}_{Aija_ia_j,m,n}
 
-    where
-    a: species of neighbor,
-    A: structure,
-    i: central atom (center),
-    n: radial channel corresponding to n'th radial basis function,
-    l: degree of spherical harmonics,
-    m: order of spherical harmonics
+    where:
+    - **A**: index atomic structure,
+    - **i**: index of central atom,
+    - **j**: index of neighbor atom,
+    - **a_i**: species of central atom,
+    - **a_j**: species of neighbor aotm,
+    - **n**: radial channel corresponding to n'th radial basis function,
+    - **l**: degree of spherical harmonics,
+    - **m**: order of spherical harmonics
 
-    :param output_order:
-        Determines the dictionary output dimension in the output array. Depending on the
-        next task the order:
-structure', 'center', 'neighbor', 'species_center', 'species_neighbor
-        - **"angular"**: [l] -> [l] -> [A, i, a_i, a_j, m, n]
-          this is the default behavior
-        - **"angular-species_pair"**: [l, a_i, a_j] -> [A, i, m, n]
-          this is how rascaline stores it
+    The indices of the coefficients are written to show the storage in an
+    equistore.TensorMap object
 
-    :param use_equistore:
-        Determines if it the output torch array should be wrapped by an equistore TensorMap that contains additional medata information not evident from the dimensions
+    .. math::
+
+         c^{keys}_{samples, components, properties}
+
     """
 
-    def __init__(self, hypers, device) -> None:
+    def __init__(self, hypers: Dict, device: str ="cpu") -> None:
         super().__init__()
 
         self.hypers = hypers
@@ -198,7 +230,7 @@ structure', 'center', 'neighbor', 'species_center', 'species_neighbor
         self.l_max = self.radial_basis_calculator.l_max
         self.spherical_harmonics_calculator = AngularBasis(self.l_max)
 
-    def forward(self, structures):
+    def forward(self, structures: Structures):
 
         cutoff_radius = self.hypers["cutoff radius"]
         cartesian_vectors = get_cartesian_vectors(structures, cutoff_radius)
