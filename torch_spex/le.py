@@ -34,13 +34,11 @@ def get_le_spliner(E_max, r_cut, device):
     E_nl = z_nl**2
 
     l_max = np.where(E_nl[0, :] <= E_max)[0][-1]
-    print(f"l_max = {l_max}")
 
     n_max_l = []
     for l in range(l_max+1):
         n_max_l.append(np.where(E_nl[:, l] <= E_max)[0][-1] + 1)
     n_max_l = np.array(n_max_l)
-    print(n_max_l)
 
     def R_nl(n, el, r):
         # Un-normalized LE radial basis functions
@@ -78,7 +76,10 @@ def get_le_spliner(E_max, r_cut, device):
         r_cut,
         maxiter = 200
     )
-    print(f"Normalization check (needs to be close to 1): {normalization_check_integral}")
+    if abs(normalization_check_integral - 1) > 1e-6:
+        warnings.warn("Normalization check needs to be close to 1,",
+                      f" but is {normalization_check_integral}",
+                      scipy.linalg.LinAlgWarning)
 
     def laplacian_eigenstate_basis_derivative(index, r):
         delta = 1e-6
