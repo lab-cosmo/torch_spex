@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import torch
 import ase
@@ -40,7 +42,6 @@ class SphericalExpansion(torch.nn.Module):
     :param hypers:
         - **cutoff radius**: cutoff for the neighborlist
         - **radial basis**: smooth basis optimizing Rayleight quotients [lle]_
-          - **r_cut** TODO
           - **E_max** energy cutoff for the eigenvalues of the eigenstates
         - **alchemical**: number of pseudo species to reduce the species channels to
 
@@ -56,7 +57,6 @@ class SphericalExpansion(torch.nn.Module):
     >>> hypers = {
     ...     "cutoff radius": 3,
     ...     "radial basis": {
-    ...         "r_cut": 3,
     ...         "E_max": 20
     ...     },
     ...     "alchemical": 1,
@@ -226,7 +226,10 @@ class VectorExpansion(torch.nn.Module):
         super().__init__()
 
         self.hypers = hypers
-        self.radial_basis_calculator = RadialBasis(hypers["radial basis"], device=device)
+        # radial basis needs to know cutoff so we pass it
+        hypers_radial_basis = copy.deepcopy(hypers["radial basis"])
+        hypers_radial_basis["r_cut"] = hypers["cutoff radius"]
+        self.radial_basis_calculator = RadialBasis(hypers_radial_basis, device=device)
         self.l_max = self.radial_basis_calculator.l_max
         self.spherical_harmonics_calculator = AngularBasis(self.l_max)
 
