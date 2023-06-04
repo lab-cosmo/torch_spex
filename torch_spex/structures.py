@@ -1,37 +1,40 @@
 import numpy as np
 import torch
+from typing import Dict, List
+import ase
 
+def ase_atoms_to_tensordict(atoms_list : List[ase.Atoms]) -> Dict[str, torch.Tensor]:
+    """
+    dictionary contains
+    - **n_structures**: ...,
+    - **positions**: ...,
+    - **cells**: ...,
+    - **structure_indices**: ...,
+    - **atomic_species**: ...
+    - **cells**: ...,
+    - **structure_indices**: ...,
+    - **atomic_species**: ...,
+    - **pbc**: ...
+    """
 
-class Structures:
+    atomic_structures = {}
 
-    # This class essentially takes a list of Atoms objects and converts
-    # all the relevant data into torch data structures
+    n_total_atoms = sum([len(atoms) for atoms in atoms_list])
+    n_structures = len(atoms_list)
+    structures_offsets = np.cumsum([0] + [len(atoms) for atoms in atoms_list])
+    atomic_structures["positions"] = torch.empty((n_total_atoms, 3), dtype=torch.get_default_dtype())
+    atomic_structures["structure_indices"] = torch.empty((n_total_atoms,), dtype=torch.int32)
+    atomic_structures["atomic_species"] = torch.empty((n_total_atoms,), dtype=torch.int32)
+    atomic_structures["cells"] = torch.empty((n_structures, 3, 3), dtype=torch.get_default_dtype())
+    atomic_structures["pbcs"] = torch.empty((n_structures,3), dtype=torch.bool)
 
-    def __init__(self, atoms_list) -> None:
-        
-        self.n_structures = len(atoms_list)
+    for structure_index, atoms in enumerate(atoms_list):
+        atoms_slice = slice(structures_offsets[structure_index], structures_offsets[structure_index+1])
+        atomic_structures["positions"][atoms_slice] = torch.tensor(atoms.positions, dtype=torch.get_default_dtype())
+        atomic_structures["structure_indices"][atoms_slice] = structure_index
+        atomic_structures["atomic_species"][atoms_slice] = torch.tensor(atoms.get_atomic_numbers(), dtype=torch.int32)
+        atomic_structures["cells"][structure_index] = torch.tensor(atoms.cell.array, dtype=torch.get_default_dtype())
+        atomic_structures["pbcs"][structure_index] = torch.tensor(atoms.pbc, dtype=torch.bool)
 
-        positions = []
-        cells = []
-        structure_indices = []
-        atomic_species = []
-        pbcs = []
-
-        for structure_index, atoms in enumerate(atoms_list):
-            positions.append(atoms.positions)
-            cells.append(atoms.cell)
-            for _ in range(atoms.positions.shape[0]):
-                structure_indices.append(structure_index)
-            atomic_species.append(atoms.get_atomic_numbers())
-            pbcs.append(atoms.pbc)
-
-        self.positions = torch.tensor(np.concatenate(positions, axis=0), dtype=torch.get_default_dtype())
-        self.cells = cells
-        self.structure_indices = np.array(structure_indices)
-        self.atomic_species = atomic_species
-        self.pbcs = pbcs
-
-    def to(self, device):
-
-        self.positions = self.positions.to(device)
-
+    atomic_structures["n_structures"] = torch.tensor(n_structures, dtype=torch.int32)
+    return atomic_structures
