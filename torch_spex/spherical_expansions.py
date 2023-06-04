@@ -10,7 +10,6 @@ from equistore import TensorMap, Labels, TensorBlock
 from .angular_basis import AngularBasis
 from .radial_basis import RadialBasis
 
-from .structures import Structures
 from typing import Dict, List
 
 class SphericalExpansion(torch.nn.Module):
@@ -52,7 +51,7 @@ class SphericalExpansion(torch.nn.Module):
 
     >>> import numpy as np
     >>> from ase.build import molecule
-    >>> from torch_spex.structures import Structures
+    >>> from torch_spex.structures import ase_atoms_to_tensordict
     >>> from torch_spex.spherical_expansions import SphericalExpansion
     >>> hypers = {
     ...     "cutoff radius": 3,
@@ -63,7 +62,8 @@ class SphericalExpansion(torch.nn.Module):
     ... }
     >>> h2o = molecule("H2O")
     >>> spherical_expansion = SphericalExpansion(hypers, [1,8], device="cpu")
-    >>> spherical_expansion.forward(Structures([h2o]))
+    >>> atomic_structures = ase_atoms_to_tensordict([h2o])
+    >>> spherical_expansion.forward(atomic_structures)
     TensorMap with 2 blocks
     keys: ['a_i' 'lam' 'sigma']
              1     0      1
@@ -89,7 +89,7 @@ class SphericalExpansion(torch.nn.Module):
         else:
             self.is_alchemical = False
 
-    def forward(self, structures: Structures):
+    def forward(self, structures: Dict[str, torch.Tensor]):
 
         expanded_vectors = self.vector_expansion_calculator(structures)
         samples_metadata = expanded_vectors.block(l=0).samples
@@ -233,7 +233,7 @@ class VectorExpansion(torch.nn.Module):
         self.l_max = self.radial_basis_calculator.l_max
         self.spherical_harmonics_calculator = AngularBasis(self.l_max)
 
-    def forward(self, structures: Structures):
+    def forward(self, structures: Dict[str, torch.Tensor]):
 
         cutoff_radius = self.hypers["cutoff radius"]
         cartesian_vectors = get_cartesian_vectors(structures, cutoff_radius)
@@ -280,24 +280,25 @@ class VectorExpansion(torch.nn.Module):
         return vector_expansion_tmap
 
 
-def get_cartesian_vectors(structures, cutoff_radius):
+def get_cartesian_vectors(structures: Dict[str, torch.Tensor], cutoff_radius: float):
 
     labels = []
     vectors = []
 
-    for structure_index in range(structures.n_structures):
+    for structure_index in range(structures["n_structures"]):
 
-        where_selected_structure = np.where(structures.structure_indices == structure_index)[0]
+        where_selected_structure = np.where(structures["structure_indices"] == structure_index)[0]
 
         centers, neighbors, unit_cell_shift_vectors = get_neighbor_list(
-            structures.positions.detach().cpu().numpy()[where_selected_structure], 
-            structures.pbcs[structure_index], 
-            structures.cells[structure_index], 
+            structures["positions"].detach().cpu().numpy()[where_selected_structure], 
+            structures["pbcs"][structure_index], 
+            structures["cells"][structure_index], 
             cutoff_radius) 
         
-        positions = structures.positions[torch.LongTensor(where_selected_structure)]
-        cell = torch.tensor(np.array(structures.cells[structure_index]), dtype=torch.get_default_dtype())
-        species = structures.atomic_species[structure_index]
+        atoms_idx = torch.LongTensor(where_selected_structure)
+        positions = structures["positions"][atoms_idx]
+        cell = torch.tensor(np.array(structures["cells"][structure_index]), dtype=torch.get_default_dtype())
+        species = structures["atomic_species"][atoms_idx]
 
         structure_vectors = positions[neighbors] - positions[centers] + (unit_cell_shift_vectors @ cell).to(positions.device)  # Warning: it works but in a weird way when there is no cell
         vectors.append(structure_vectors)
