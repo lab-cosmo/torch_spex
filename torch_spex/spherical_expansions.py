@@ -64,9 +64,9 @@ class SphericalExpansion(torch.nn.Module):
     >>> atomic_structures = ase_atoms_to_tensordict([h2o])
     >>> spherical_expansion.forward(atomic_structures)
     TensorMap with 2 blocks
-    keys: ['a_i' 'lam' 'sigma']
-             1     0      1
-             8     0      1
+    keys: a_i  lam  sigma
+           1    0     1
+           8    0     1
 
     """
 
