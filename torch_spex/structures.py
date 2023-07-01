@@ -3,7 +3,7 @@ import torch
 from typing import Dict, List
 import ase
 
-def ase_atoms_to_tensordict(atoms_list : List[ase.Atoms], device : torch.device) -> Dict[str, torch.Tensor]:
+def ase_atoms_to_tensordict(atoms_list : List[ase.Atoms], device : torch.device = "cpu") -> Dict[str, torch.Tensor]:
     """
     dictionary contains
     - **n_structures**: ...,
