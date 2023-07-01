@@ -10,6 +10,7 @@ def compute_forces(
         retain_graph=is_training,
         create_graph=is_training,
     )[0]
+    positions.requires_grad_(False)
     return -1 * gradient
 
 

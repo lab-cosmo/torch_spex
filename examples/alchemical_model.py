@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from dataset import get_dataset_slices
 from torch_spex.forces import compute_forces
-from torch_spex.structures import Structures
+from torch_spex.structures import ase_atoms_to_tensordict
 from torch_spex.spherical_expansions import SphericalExpansion
 from power_spectrum import PowerSpectrum
 
@@ -44,9 +44,10 @@ force_weight = 1.0
 n_test = 100
 n_train = 100
 r_cut = 5.0
-optimizer_name = "LBFGS"
+optimizer_name = "Adam"
 
 np.random.seed(random_seed)
+torch.manual_seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -112,12 +113,11 @@ class Model(torch.nn.Module):
     def forward(self, structures, is_training=True):
 
         # print("Transforming structures")
-        structures = Structures(structures)
-        structures.to(device)
-        energies = torch.zeros((structures.n_structures,), device=device, dtype=torch.get_default_dtype())
+        structures = ase_atoms_to_tensordict(structures, device=device)
+        energies = torch.zeros((structures["n_structures"].item(),), device=device, dtype=torch.get_default_dtype())
 
         if self.do_forces:
-            structures.positions.requires_grad = True
+            structures["positions"].requires_grad = True
 
         # print("Calculating spherical expansion")
         spherical_expansion = self.spherical_expansion_calculator(structures)
@@ -128,9 +128,11 @@ class Model(torch.nn.Module):
 
         # print("Computing forces by backpropagation")
         if self.do_forces:
-            forces = compute_forces(energies, structures.positions, is_training=is_training)
+            forces = compute_forces(energies, structures["positions"], is_training=is_training)
         else:
             forces = None  # Or zero-dimensional tensor?
+
+        print(structures["positions"].requires_grad)
 
         return energies, forces
 
