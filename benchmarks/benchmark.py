@@ -44,7 +44,7 @@ print(f"torch_spex took {finish_time-start_time} s")
 all_species = np.unique(spherical_expansion_coefficients_torch_spex.keys["a_i"])
 
 l_max = 0
-for key, block in spherical_expansion_coefficients_torch_spex:
+for key, block in spherical_expansion_coefficients_torch_spex.items():
     l_max = max(l_max, key[1])
 print("l_max is", l_max)
 n_max = spherical_expansion_coefficients_torch_spex.block(0).values.shape[2] // len(all_species)

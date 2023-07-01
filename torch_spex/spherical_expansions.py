@@ -6,10 +6,9 @@ import ase
 from ase.neighborlist import primitive_neighbor_list
 import equistore
 from equistore import TensorMap, Labels, TensorBlock
+import sphericart.torch
 
-from .angular_basis import AngularBasis
 from .radial_basis import RadialBasis
-
 from .structures import Structures
 from typing import Dict, List
 
@@ -101,7 +100,7 @@ class SphericalExpansion(torch.nn.Module):
         n_species = len(self.all_species)
         species_to_index = {atomic_number : i_species for i_species, atomic_number in enumerate(self.all_species)}
 
-        s_i_metadata = np.stack([s_metadata, i_metadata], axis=-1)
+        s_i_metadata = np.concatenate([s_metadata, i_metadata], axis=-1)
         unique_s_i_indices, s_i_unique_to_metadata, s_i_metadata_to_unique = np.unique(s_i_metadata, axis=0, return_index=True, return_inverse=True)
 
         l_max = self.vector_expansion_calculator.l_max
@@ -134,7 +133,9 @@ class SphericalExpansion(torch.nn.Module):
             species = -np.arange(self.n_pseudo_species)
         else:
             aj_metadata = samples_metadata["species_neighbor"]
-            aj_shifts = np.array([species_to_index[aj_index] for aj_index in aj_metadata])
+            for aj_index in aj_metadata:
+                pass # print(aj_index)
+            aj_shifts = np.array([species_to_index[aj_index] for aj_index in aj_metadata.values[:, 0]])
             density_indices = torch.LongTensor(s_i_metadata_to_unique*n_species+aj_shifts)
 
             for l in range(l_max+1):
@@ -150,14 +151,14 @@ class SphericalExpansion(torch.nn.Module):
             species = self.all_species
 
         # constructs the TensorMap object
-        ai_new_indices = torch.tensor(ai_metadata[s_i_unique_to_metadata])
+        ai_new_indices = torch.tensor(ai_metadata.values[s_i_unique_to_metadata])
         labels = []
         blocks = []
         for l in range(l_max+1):
             densities_l = densities[l]
             vectors_l_block = expanded_vectors.block(l=l)
             vectors_l_block_components = vectors_l_block.components
-            vectors_l_block_n = vectors_l_block.properties["n"]
+            vectors_l_block_n = vectors_l_block.properties["n"].values[:, 0]
             for a_i in self.all_species:
                 where_ai = torch.LongTensor(np.where(ai_new_indices == a_i)[0]).to(densities_l.device)
                 densities_ai_l = torch.index_select(densities_l, 0, where_ai)
@@ -231,7 +232,8 @@ class VectorExpansion(torch.nn.Module):
         hypers_radial_basis["r_cut"] = hypers["cutoff radius"]
         self.radial_basis_calculator = RadialBasis(hypers_radial_basis, device=device)
         self.l_max = self.radial_basis_calculator.l_max
-        self.spherical_harmonics_calculator = AngularBasis(self.l_max)
+        self.spherical_harmonics_calculator = sphericart.torch.SphericalHarmonics(self.l_max, normalized=True)
+        self.spherical_harmonics_split_list = [(2*l+1) for l in range(self.l_max+1)]
 
     def forward(self, structures: Structures):
 
@@ -246,7 +248,8 @@ class VectorExpansion(torch.nn.Module):
         )
         radial_basis = self.radial_basis_calculator(r)
 
-        spherical_harmonics = self.spherical_harmonics_calculator(bare_cartesian_vectors)
+        spherical_harmonics = self.spherical_harmonics_calculator.compute(bare_cartesian_vectors)  # Get the spherical harmonics
+        spherical_harmonics = torch.split(spherical_harmonics, self.spherical_harmonics_split_list, dim=1)  # Split them into l chunks
 
         # Use broadcasting semantics to get the products in equistore shape
         vector_expansion_blocks = []

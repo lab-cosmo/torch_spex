@@ -6,9 +6,10 @@ from torch_spex.le import Jn_zeros
 from torch_spex.spherical_expansions import SphericalExpansion
 from torch_spex.structures import Structures
 
+import os
 import cProfile
 
-device = "cpu"
+device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Running on {device}")
 
 torch.set_default_dtype(torch.float64)
@@ -16,13 +17,14 @@ torch.set_default_dtype(torch.float64)
 a = 6.0
 E_max = 200
 
-structures = ase.io.read("../datasets/rmd17/ethanol1.extxyz", ":20")
+dataset_path = os.path.join(os.path.dirname(__file__), "../datasets/rmd17/ethanol1.extxyz")
+structures = ase.io.read(dataset_path, ":20")
 
 hypers_spherical_expansion = {
     "cutoff radius": 6.0,
     "radial basis": {
         "r_cut": 6.0,
-        "E_max": 200 
+        "E_max": 400 
     }
 }
 calculator = SphericalExpansion(hypers_spherical_expansion, [1, 6, 8], device=device)
