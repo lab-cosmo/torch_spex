@@ -77,7 +77,7 @@ hypers = {
     }
 }
 
-all_species = np.sort(np.unique(np.concatenate([train_structure.numbers for train_structure in train_structures] + [test_structure.numbers for test_structure in test_structures])))
+all_species = torch.tensor(np.sort(np.unique(np.concatenate([train_structure.numbers for train_structure in train_structures] + [test_structure.numbers for test_structure in test_structures]))))
 print(f"All species: {all_species}")
 
 
@@ -131,8 +131,6 @@ class Model(torch.nn.Module):
             forces = compute_forces(energies, structures["positions"], is_training=is_training)
         else:
             forces = None  # Or zero-dimensional tensor?
-
-        print(structures["positions"].requires_grad)
 
         return energies, forces
 
@@ -242,10 +240,10 @@ test_energies = test_energies.to(device)
 
 # Linear fit for one-body energies:
 import rascaline
-import equistore
+import equistore.torch as equistore
 center_species_labels = equistore.Labels(
     names = ["species_center"],
-    values = np.array(all_species).reshape(-1, 1)
+    values = all_species.reshape(-1, 1)
 )
 comp_calculator = rascaline.AtomicComposition(per_structure=True)
 train_comp = comp_calculator.compute(train_structures)
@@ -282,15 +280,30 @@ stats.strip_dirs().sort_stats('tottime').print_stats(100)
 import os
 os.remove('profile')"""
 
-for epoch in range(1000):
-    
-    total_loss = model.train_epoch(train_data_loader, force_weight)
+import cProfile
 
-    predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
-    predicted_test_energies, predicted_test_forces = model.predict_epoch(predict_test_data_loader)
+def run():
+    for epoch in range(5):
+        
+        total_loss = model.train_epoch(train_data_loader, force_weight)
 
-    print()
-    print(f"Epoch number {epoch}, Total loss: {total_loss}")
-    print(f"Energy errors: Train RMSE: {get_rmse(predicted_train_energies, train_energies)}, Train MAE: {get_mae(predicted_train_energies, train_energies)}, Test RMSE: {get_rmse(predicted_test_energies, test_energies)}, Test MAE: {get_mae(predicted_test_energies, test_energies)}")
-    if do_forces:
-        print(f"Force errors: Train RMSE: {get_rmse(predicted_train_forces, train_forces)}, Train MAE: {get_mae(predicted_train_forces, train_forces)}, Test RMSE: {get_rmse(predicted_test_forces, test_forces)}, Test MAE: {get_mae(predicted_test_forces, test_forces)}")
+        predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
+        predicted_test_energies, predicted_test_forces = model.predict_epoch(predict_test_data_loader)
+
+        print()
+        print(f"Epoch number {epoch}, Total loss: {total_loss}")
+        print(f"Energy errors: Train RMSE: {get_rmse(predicted_train_energies, train_energies)}, Train MAE: {get_mae(predicted_train_energies, train_energies)}, Test RMSE: {get_rmse(predicted_test_energies, test_energies)}, Test MAE: {get_mae(predicted_test_energies, test_energies)}")
+        if do_forces:
+            print(f"Force errors: Train RMSE: {get_rmse(predicted_train_forces, train_forces)}, Train MAE: {get_mae(predicted_train_forces, train_forces)}, Test RMSE: {get_rmse(predicted_test_forces, test_forces)}, Test MAE: {get_mae(predicted_test_forces, test_forces)}")
+
+cProfile.runctx('run()', globals(), {'run': run}, 'profile')
+
+
+import pstats
+stats = pstats.Stats('profile')
+stats.strip_dirs().sort_stats('tottime').print_stats(100)
+
+import os
+os.remove('profile')
+
+

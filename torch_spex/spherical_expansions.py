@@ -4,8 +4,8 @@ import numpy as np
 import torch
 import ase
 from ase.neighborlist import primitive_neighbor_list
-import equistore
-from equistore import TensorMap, Labels, TensorBlock
+import equistore.torch as equistore
+from equistore.torch import TensorMap, Labels, TensorBlock
 import sphericart.torch
 
 from .radial_basis import RadialBasis
@@ -74,7 +74,7 @@ class SphericalExpansion(torch.nn.Module):
         super().__init__()
 
         self.hypers = hypers
-        self.all_species = np.array(all_species, dtype=np.int32)  # convert potential list to np.array
+        self.all_species = all_species
         self.vector_expansion_calculator = VectorExpansion(hypers, device=device)
 
         if "alchemical" in self.hypers:
@@ -91,7 +91,7 @@ class SphericalExpansion(torch.nn.Module):
     def forward(self, structures: Dict[str, torch.Tensor]):
 
         expanded_vectors = self.vector_expansion_calculator(structures)
-        samples_metadata = expanded_vectors.block(l=0).samples
+        samples_metadata = expanded_vectors.block(0).samples
 
         s_metadata = samples_metadata["structure"]
         i_metadata = samples_metadata["center"]
@@ -262,11 +262,11 @@ class VectorExpansion(torch.nn.Module):
                     samples = cartesian_vectors.samples,
                     components = [Labels(
                         names = ("m",),
-                        values = np.arange(-l, l+1, dtype=np.int32).reshape(2*l+1, 1)
+                        values = torch.arange(-l, l+1).reshape(2*l+1, 1)
                     )],
                     properties = Labels(
                         names = ("n",),
-                        values = np.arange(0, n_max_l, dtype=np.int32).reshape(n_max_l, 1)
+                        values = torch.arange(0, n_max_l).reshape(n_max_l, 1)
                     )
                 )
             )
@@ -275,7 +275,7 @@ class VectorExpansion(torch.nn.Module):
         vector_expansion_tmap = TensorMap(
             keys = Labels(
                 names = ("l",),
-                values = np.arange(0, l_max+1, dtype=np.int32).reshape(l_max+1, 1),
+                values = torch.arange(0, l_max+1).reshape(l_max+1, 1),
             ),
             blocks = vector_expansion_blocks
         )
@@ -293,43 +293,45 @@ def get_cartesian_vectors(structures: Dict[str, torch.Tensor], cutoff_radius: fl
         where_selected_structure = np.where(structures["structure_indices"] == structure_index)[0]
 
         centers, neighbors, unit_cell_shift_vectors = get_neighbor_list(
-            structures["positions"].detach().cpu().numpy()[where_selected_structure], 
+            structures["positions"][where_selected_structure].detach().cpu().numpy(), 
             structures["pbcs"][structure_index], 
-            structures["cells"][structure_index], 
-            cutoff_radius) 
+            structures["cells"][structure_index].detach().cpu().numpy(), 
+            cutoff_radius
+        ) 
         
         atoms_idx = torch.LongTensor(where_selected_structure)
         positions = structures["positions"][atoms_idx]
-        cell = torch.tensor(np.array(structures["cells"][structure_index]), dtype=torch.get_default_dtype())
+        cell = structures["cells"][structure_index]
         species = structures["atomic_species"][atoms_idx]
 
-        structure_vectors = positions[neighbors] - positions[centers] + (unit_cell_shift_vectors @ cell).to(positions.device)  # Warning: it works but in a weird way when there is no cell
+        structure_vectors = positions[neighbors] - positions[centers] + (unit_cell_shift_vectors.to(positions.device).to(dtype=torch.get_default_dtype()) @ cell)  # Warning: it works but in a weird way when there is no cell
         vectors.append(structure_vectors)
         labels.append(
-            np.stack([
-                np.array([structure_index]*len(centers)), 
-                centers.numpy(), 
-                neighbors.numpy(), 
+            torch.stack([
+                torch.tensor([structure_index]*len(centers)), 
+                centers, 
+                neighbors, 
                 species[centers], 
                 species[neighbors],
                 unit_cell_shift_vectors[:, 0],
                 unit_cell_shift_vectors[:, 1],
                 unit_cell_shift_vectors[:, 2]
-            ], axis=-1))
+            ], dim=-1)
+        )
 
     vectors = torch.cat(vectors, dim=0)
-    labels = np.concatenate(labels, axis=0)
+    labels = torch.concat(labels, dim=0)
     
     block = TensorBlock(
         values = vectors.unsqueeze(dim=-1),
         samples = Labels(
             names = ["structure", "center", "neighbor", "species_center", "species_neighbor", "cell_x", "cell_y", "cell_z"],
-            values = np.array(labels, dtype=np.int32)
+            values = labels
         ),
         components = [
             Labels(
                 names = ["cartesian_dimension"],
-                values = np.array([-1, 0, 1], dtype=np.int32).reshape((-1, 1))
+                values = torch.tensor([-1, 0, 1]).reshape((-1, 1))
             )
         ],
         properties = Labels.single()
@@ -359,6 +361,6 @@ def get_neighbor_list(positions, pbc, cell, cutoff_radius):
 
     centers = torch.LongTensor(centers)
     neighbors = torch.LongTensor(neighbors)
-    unit_cell_shift_vectors = torch.tensor(unit_cell_shift_vectors, dtype=torch.get_default_dtype())
+    unit_cell_shift_vectors = torch.LongTensor(unit_cell_shift_vectors)
 
     return centers, neighbors, unit_cell_shift_vectors

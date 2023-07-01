@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from equistore import TensorMap, Labels, TensorBlock
+from equistore.torch import TensorMap, Labels, TensorBlock
 
 class PowerSpectrum(torch.nn.Module):
 

@@ -4,7 +4,7 @@ import pytest
 
 import torch
 
-import equistore
+import equistore.torch as equistore
 import numpy as np
 import ase.io
 

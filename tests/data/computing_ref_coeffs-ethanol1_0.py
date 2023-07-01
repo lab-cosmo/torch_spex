@@ -4,7 +4,7 @@ from torch_spex.structures import Structures
 import torch
 import numpy as np
 import json
-import equistore
+import equistore.torch as equistore
 import ase.io
 
 frames = ase.io.read('../../datasets/rmd17/ethanol1.extxyz', ':1')
