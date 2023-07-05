@@ -93,15 +93,13 @@ class SphericalExpansion(torch.nn.Module):
         expanded_vectors = self.vector_expansion_calculator(structures)
         samples_metadata = expanded_vectors.block(l=0).samples
 
-        s_metadata = samples_metadata["structure"]
-        i_metadata = samples_metadata["center"]
+        s_i_metadata = samples_metadata["structure", "center"]
         ai_metadata = samples_metadata["species_center"]
 
         n_species = len(self.all_species)
         species_to_index = {atomic_number : i_species for i_species, atomic_number in enumerate(self.all_species)}
 
-        s_i_metadata = np.concatenate([s_metadata, i_metadata], axis=-1)
-        unique_s_i_indices, s_i_unique_to_metadata, s_i_metadata_to_unique = np.unique(s_i_metadata, axis=0, return_index=True, return_inverse=True)
+        unique_s_i_indices, s_i_unique_to_metadata, s_i_metadata_to_unique = np.unique(s_i_metadata.values, axis=0, return_index=True, return_inverse=True)
 
         l_max = self.vector_expansion_calculator.l_max
         n_centers = len(unique_s_i_indices)

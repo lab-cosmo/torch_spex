@@ -41,8 +41,8 @@ target_key = "energy"
 dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
 force_weight = 1.0
-n_test = 100
-n_train = 100
+n_test = 1000
+n_train = 10000
 r_cut = 5.0
 optimizer_name = "Adam"
 
@@ -131,8 +131,6 @@ class Model(torch.nn.Module):
             forces = compute_forces(energies, structures["positions"], is_training=is_training)
         else:
             forces = None  # Or zero-dimensional tensor?
-
-        print(structures["positions"].requires_grad)
 
         return energies, forces
 

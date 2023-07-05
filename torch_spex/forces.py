@@ -6,11 +6,10 @@ def compute_forces(
     gradient = torch.autograd.grad(
         outputs=energy,
         inputs=positions,
-        grad_outputs=torch.ones_like(energy),  # This works because positions don't contribute to energies of other structures
+        grad_outputs=torch.ones_like(energy),
         retain_graph=is_training,
         create_graph=is_training,
     )[0]
-    positions.requires_grad_(False)
     return -1 * gradient
 
 
