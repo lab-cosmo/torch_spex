@@ -31,7 +31,6 @@ class PowerSpectrum(torch.nn.Module):
         )
 
         for a_i in self.all_species:
-            # print(f"Combining center species = {a_i}")
 
             if nu not in self.nu_plus_one_count:
 
@@ -39,7 +38,7 @@ class PowerSpectrum(torch.nn.Module):
                 selected_features = {}
                 properties_values = []
 
-                for l in range(l_max+1):  # l and lbda are now the same thing
+                for l in range(l_max+1):
                     selected_features[l] = []
 
                     block = spex.block(lam=l, a_i=a_i)

@@ -42,7 +42,7 @@ dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
 force_weight = 1.0
 n_test = 1000
-n_train = 10000
+n_train = 1000
 r_cut = 5.0
 optimizer_name = "Adam"
 
@@ -227,8 +227,8 @@ else:
 
 train_data_loader = torch.utils.data.DataLoader(train_structures, batch_size=batch_size, shuffle=True, collate_fn=(lambda x: x))
 
-predict_train_data_loader = torch.utils.data.DataLoader(train_structures, batch_size=512, shuffle=False, collate_fn=(lambda x: x))
-predict_test_data_loader = torch.utils.data.DataLoader(test_structures, batch_size=512, shuffle=False, collate_fn=(lambda x: x))
+predict_train_data_loader = torch.utils.data.DataLoader(train_structures, batch_size=256, shuffle=False, collate_fn=(lambda x: x))
+predict_test_data_loader = torch.utils.data.DataLoader(test_structures, batch_size=256, shuffle=False, collate_fn=(lambda x: x))
 
 # with torch.autograd.set_detect_anomaly(True):
 predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
