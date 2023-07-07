@@ -203,7 +203,7 @@ class Model(torch.nn.Module):
         for a_i in self.all_species:
             block = tmap.block(a_i=a_i)
             features = block.values.squeeze(dim=1)
-            structure_indices.append(block.samples["structure"].values[:, 0])
+            structure_indices.append(block.samples["structure"])
             atomic_energies.append(
                 layer[str(a_i)](features).squeeze(dim=-1)
             )

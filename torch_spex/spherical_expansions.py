@@ -93,8 +93,8 @@ class SphericalExpansion(torch.nn.Module):
         expanded_vectors = self.vector_expansion_calculator(structures)
         samples_metadata = expanded_vectors.block(l=0).samples
 
-        s_metadata = torch.LongTensor(samples_metadata["structure"].values.reshape(-1))
-        i_metadata = torch.LongTensor(samples_metadata["center"].values.reshape(-1))
+        s_metadata = torch.LongTensor(samples_metadata["structure"].copy())  # Copy to suppress torch warning about non-writeability
+        i_metadata = torch.LongTensor(samples_metadata["center"].copy())
         ai_metadata = samples_metadata["species_center"]
 
         n_species = len(self.all_species)
@@ -136,7 +136,7 @@ class SphericalExpansion(torch.nn.Module):
             aj_metadata = samples_metadata["species_neighbor"]
             for aj_index in aj_metadata:
                 pass # print(aj_index)
-            aj_shifts = np.array([species_to_index[aj_index] for aj_index in aj_metadata.values[:, 0]])
+            aj_shifts = np.array([species_to_index[aj_index] for aj_index in aj_metadata])
             density_indices = torch.LongTensor(s_i_metadata_to_unique*n_species+aj_shifts)
 
             for l in range(l_max+1):
@@ -159,7 +159,7 @@ class SphericalExpansion(torch.nn.Module):
             densities_l = densities[l]
             vectors_l_block = expanded_vectors.block(l=l)
             vectors_l_block_components = vectors_l_block.components
-            vectors_l_block_n = vectors_l_block.properties["n"].values[:, 0]
+            vectors_l_block_n = vectors_l_block.properties["n"]
             for a_i in self.all_species:
                 where_ai = torch.LongTensor(np.where(ai_new_indices == a_i)[0]).to(densities_l.device)
                 densities_ai_l = torch.index_select(densities_l, 0, where_ai)

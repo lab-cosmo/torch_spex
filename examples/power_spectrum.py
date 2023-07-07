@@ -47,7 +47,7 @@ class PowerSpectrum(torch.nn.Module):
                     for q_nu in range(block.values.shape[-1]):
                         for q_1 in range(block.values.shape[-1]):
 
-                            properties_list = [[block.properties[name].values[:, 0][q_nu] for name in block.properties.names] + [block.properties[name].values[:, 0][q_1] for name in block.properties.names[:-1]] + [0]]
+                            properties_list = [[block.properties[name][q_nu] for name in block.properties.names] + [block.properties[name][q_1] for name in block.properties.names[:-1]] + [0]]
                             properties_values.append(properties_list)
                             selected_features[l].append([q_nu, q_1])
                             
