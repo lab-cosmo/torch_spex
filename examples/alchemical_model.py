@@ -42,7 +42,7 @@ dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
 force_weight = 1.0
 n_test = 1000
-n_train = 1000
+n_train = 10000
 r_cut = 5.0
 optimizer_name = "Adam"
 
@@ -227,8 +227,8 @@ else:
 
 train_data_loader = torch.utils.data.DataLoader(train_structures, batch_size=batch_size, shuffle=True, collate_fn=(lambda x: x))
 
-predict_train_data_loader = torch.utils.data.DataLoader(train_structures, batch_size=256, shuffle=False, collate_fn=(lambda x: x))
-predict_test_data_loader = torch.utils.data.DataLoader(test_structures, batch_size=256, shuffle=False, collate_fn=(lambda x: x))
+predict_train_data_loader = torch.utils.data.DataLoader(train_structures, batch_size=32, shuffle=False, collate_fn=(lambda x: x))
+predict_test_data_loader = torch.utils.data.DataLoader(test_structures, batch_size=32, shuffle=False, collate_fn=(lambda x: x))
 
 # with torch.autograd.set_detect_anomaly(True):
 predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
@@ -282,13 +282,13 @@ os.remove('profile')"""
 
 for epoch in range(1000):
     
-    total_loss = model.train_epoch(train_data_loader, force_weight)
+    _ = model.train_epoch(train_data_loader, force_weight)
 
     predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
     predicted_test_energies, predicted_test_forces = model.predict_epoch(predict_test_data_loader)
 
     print()
-    print(f"Epoch number {epoch}, Total loss: {total_loss}")
+    print(f"Epoch number {epoch}, Total loss: {get_sse(predicted_train_energies, train_energies)+force_weight*get_sse(predicted_train_forces, train_forces)}")
     print(f"Energy errors: Train RMSE: {get_rmse(predicted_train_energies, train_energies)}, Train MAE: {get_mae(predicted_train_energies, train_energies)}, Test RMSE: {get_rmse(predicted_test_energies, test_energies)}, Test MAE: {get_mae(predicted_test_energies, test_energies)}")
     if do_forces:
         print(f"Force errors: Train RMSE: {get_rmse(predicted_train_forces, train_forces)}, Train MAE: {get_mae(predicted_train_forces, train_forces)}, Test RMSE: {get_rmse(predicted_test_forces, test_forces)}, Test MAE: {get_mae(predicted_test_forces, test_forces)}")

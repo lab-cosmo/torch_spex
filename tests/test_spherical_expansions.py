@@ -21,7 +21,7 @@ class TestSphericalExpansion:
 
     def test_vector_expansion_coeffs(self):
         tm_ref = equistore.core.io.load_custom_array("tests/data/vector_expansion_coeffs-ethanol1_0-data.npz", equistore.core.io.create_torch_array)
-        vector_expansion = VectorExpansion(self.hypers, device="cpu")
+        vector_expansion = VectorExpansion(self.hypers, self.all_species, device="cpu")
         with torch.no_grad():
             tm = vector_expansion.forward(self.structures)
         # default types are float32 so we set accuracy to 1e-7

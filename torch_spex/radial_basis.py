@@ -21,6 +21,17 @@ class RadialBasis(torch.nn.Module):
             )
         else:
             self.is_alchemical = False
+        """self.radial_mlps = torch.nn.ModuleDict({
+            str(l)+"_"+str(aj) : torch.nn.Sequential(
+                torch.nn.Linear(self.n_max_l[l], 32),
+                torch.nn.SiLU(),
+                torch.nn.Linear(32, 32),
+                torch.nn.SiLU(),
+                torch.nn.Linear(32, 32),
+                torch.nn.SiLU(),
+                torch.nn.Linear(32, self.n_max_l[l])
+            ) for aj in range(self.n_pseudo_species) for l in range(self.l_max+1)
+        })"""
 
     def forward(self, r, samples_metadata):
 
@@ -44,6 +55,10 @@ class RadialBasis(torch.nn.Module):
                 # Note: if the model is alchemical, now the radial basis has one extra dimension: the alpha_j dimension, which is in the middle
             radial_basis.append(radial_basis_l)
             index += self.n_max_l[l]
+
+        """for l in range(self.l_max+1):
+            for aj in range(self.n_pseudo_species):
+                radial_basis[l][:, aj, :] = self.radial_mlps[str(l)+"_"+str(aj)](radial_basis[l][:, aj, :].clone())"""
 
         return radial_basis
 
