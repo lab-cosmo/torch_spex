@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from dataset import get_dataset_slices
 from torch_spex.forces import compute_forces
-from torch_spex.structures import Structures
+from torch_spex.structures import ase_atoms_to_tensordict
 from torch_spex.spherical_expansions import SphericalExpansion
 from power_spectrum import PowerSpectrum
 
@@ -40,8 +40,8 @@ target_key = "energy"
 dataset_path = "../datasets/rmd17/ethanol1.extxyz"
 do_forces = True
 force_weight = 0.01
-n_test = 1000
-n_train = 1000
+n_test = 50
+n_train = 200
 r_cut = 4.0
 optimizer_name = "Adam"
 
@@ -110,12 +110,11 @@ class Model(torch.nn.Module):
     def forward(self, structures, is_training=True):
 
         # print("Transforming structures")
-        structures = Structures(structures)
-        structures.to(device)
-        energies = torch.zeros((structures.n_structures,), device=device, dtype=torch.get_default_dtype())
+        structures = ase_atoms_to_tensordict(structures, device=device)
+        energies = torch.zeros((structures["n_structures"],), device=device, dtype=torch.get_default_dtype())
 
         if self.do_forces:
-            structures.positions.requires_grad = True
+            structures["positions"].requires_grad = True
 
         # print("Calculating spherical expansion")
         spherical_expansion = self.spherical_expansion_calculator(structures)
@@ -126,7 +125,7 @@ class Model(torch.nn.Module):
 
         # print("Computing forces by backpropagation")
         if self.do_forces:
-            forces = compute_forces(energies, structures.positions, is_training=is_training)
+            forces = compute_forces(energies, structures["positions"], is_training=is_training)
         else:
             forces = None  # Or zero-dimensional tensor?
 
