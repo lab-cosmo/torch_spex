@@ -70,7 +70,8 @@ hypers = {
     "cutoff radius": r_cut,
     "radial basis": {
         "r_cut": r_cut,
-        "E_max": 200
+        "E_max": 200,
+        "normalize": False
     }
 }
 
