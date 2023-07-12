@@ -20,7 +20,7 @@ setup(
     name='torch_spex',
     packages = find_packages(),
     install_requires=[
-        'sphericart[torch]',
+        'sphericart[torch]@git+https://github.com/lab-cosmo/sphericart.git',
         'numpy',
         'ase',
         'torch',
