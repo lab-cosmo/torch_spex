@@ -1,3 +1,6 @@
+# reference data was produced using commit c0a60120e438b3fe44180aa7ecf5c43fd34799c1
+# computes reference points using ethanlo dataset
+
 from torch_spex.spherical_expansions import VectorExpansion, SphericalExpansion
 from torch_spex.structures import Structures
 
