@@ -68,6 +68,51 @@ class TestEthanol1SphericalExpansion:
         # now we using float64 computation the accuracy had to be decreased again
         assert equistore.operations.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
 
+class TestArtificialSphericalExpansion:
+    """
+    Tests on the artificial dataset
+    """
+    device = "cpu"
+    frames = ase.io.read('tests/datasets/artificial.extxyz', ':')
+    all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
+    structures = ase_atoms_to_tensordict(frames)
+    with open("tests/data/expansion_coeffs-artificial-hypers.json", "r") as f:
+        hypers = json.load(f)
+
+    def test_vector_expansion_coeffs(self):
+        tm_ref = equistore.core.io.load_custom_array("tests/data/vector_expansion_coeffs-artificial-data.npz", equistore.core.io.create_torch_array)
+        tm_ref = sort_tm(tm_ref)
+        vector_expansion = VectorExpansion(self.hypers, self.all_species, device=self.device)
+        with torch.no_grad():
+            tm = sort_tm(vector_expansion.forward(self.structures))
+        assert equistore.operations.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+
+    def test_spherical_expansion_coeffs(self):
+        tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-artificial-data.npz", equistore.core.io.create_torch_array)
+        spherical_expansion_calculator = SphericalExpansion(self.hypers, self.all_species, device=self.device)
+        with torch.no_grad():
+            tm = spherical_expansion_calculator.forward(self.structures)
+        # The absolute accuracy is a bit smaller than in the ethanol case
+        # I presume it is because we use 5 frames instead of just one
+        assert equistore.operations.allclose(tm_ref, tm, atol=3e-5, rtol=1e-5)
+
+    def test_spherical_expansion_coeffs_artificial(self):
+        with open("tests/data/expansion_coeffs-artificial-alchemical-hypers.json", "r") as f:
+            hypers = json.load(f)
+        tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-artificial-alchemical-seed0-data.npz", equistore.core.io.create_torch_array)
+        spherical_expansion_calculator = SphericalExpansion(hypers, self.all_species, device=self.device)
+        with torch.no_grad():
+            spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.combination_matrix.weight.copy_(
+                torch.tensor(
+                    [[-0.00432252,  0.30971584, -0.47518533],
+                     [-0.4248946 , -0.22236897,  0.15482073]],
+                    dtype=torch.float32
+                )
+            )
+        with torch.no_grad():
+            tm = spherical_expansion_calculator.forward(self.structures)
+        assert equistore.operations.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+
 ### these util functions will be removed once lab-cosmo/equistore/pull/281 is merged
 def native_list_argsort(native_list):
     return sorted(range(len(native_list)), key=native_list.__getitem__)
