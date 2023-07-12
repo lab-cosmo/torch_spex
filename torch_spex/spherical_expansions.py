@@ -219,7 +219,7 @@ class VectorExpansion(torch.nn.Module):
             self.is_alchemical = False
         self.radial_basis_calculator = RadialBasis(hypers_radial_basis, all_species, device=device)
         self.l_max = self.radial_basis_calculator.l_max
-        self.spherical_harmonics_calculator = sphericart.torch.SphericalHarmonics(self.l_max, normalized=True, backward_second_derivatives=True)
+        self.spherical_harmonics_calculator = sphericart.torch.SphericalHarmonics(self.l_max, normalized=True)
         self.spherical_harmonics_split_list = [(2*l+1) for l in range(self.l_max+1)]
 
     def forward(self, structures: Dict[str, torch.Tensor]):
