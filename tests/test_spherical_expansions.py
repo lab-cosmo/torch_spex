@@ -10,7 +10,9 @@ import numpy as np
 import ase.io
 
 from torch_spex.spherical_expansions import VectorExpansion, SphericalExpansion
-from torch_spex.structures import ase_atoms_to_tensordict
+from torch_spex.structures import InMemoryDataset, TransformerNeighborList, collate_nl
+from torch.utils.data import DataLoader
+from equistore import TensorMap, TensorBlock, Labels
 
 class TestEthanol1SphericalExpansion:
     """
@@ -18,10 +20,16 @@ class TestEthanol1SphericalExpansion:
     """
     device = "cpu"
     frames = ase.io.read('datasets/rmd17/ethanol1.extxyz', ':1')
-    all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
-    structures = ase_atoms_to_tensordict(frames)
+    all_species = np.unique([frame.numbers for frame in frames])
     with open("tests/data/expansion_coeffs-ethanol1_0-hypers.json", "r") as f:
         hypers = json.load(f)
+
+    transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"])]
+    dataset = InMemoryDataset(frames, transformers)
+    loader = DataLoader(dataset, batch_size=1, collate_fn=collate_nl)
+    batch = next(iter(loader))
+    batch.pop("positions")
+    batch.pop("cell")
 
     def test_vector_expansion_coeffs(self):
         tm_ref = equistore.core.io.load_custom_array("tests/data/vector_expansion_coeffs-ethanol1_0-data.npz", equistore.core.io.create_torch_array)
@@ -30,7 +38,7 @@ class TestEthanol1SphericalExpansion:
         tm_ref = sort_tm(tm_ref)
         vector_expansion = VectorExpansion(self.hypers, self.all_species, device=self.device)
         with torch.no_grad():
-            tm = sort_tm(vector_expansion.forward(self.structures))
+            tm = sort_tm(vector_expansion.forward(**self.batch))
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
         # Because the reference value have been cacluated using float32 and
         # now we using float64 computation the accuracy had to be decreased again
@@ -40,7 +48,7 @@ class TestEthanol1SphericalExpansion:
         tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-ethanol1_0-data.npz", equistore.core.io.create_torch_array)
         spherical_expansion_calculator = SphericalExpansion(self.hypers, self.all_species, device=self.device)
         with torch.no_grad():
-            tm = spherical_expansion_calculator.forward(self.structures)
+            tm = spherical_expansion_calculator.forward(**self.batch)
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
         # Because the reference value have been cacluated using float32 and
         # now we using float64 computation the accuracy had to be decreased again
@@ -62,7 +70,7 @@ class TestEthanol1SphericalExpansion:
                      [-0.4248946 , -0.22236897,  0.15482073]], dtype=torch.float32))
 
         with torch.no_grad():
-            tm = spherical_expansion_calculator.forward(self.structures)
+            tm = spherical_expansion_calculator.forward(**self.batch)
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
         # Because the reference value have been cacluated using float32 and
         # now we using float64 computation the accuracy had to be decreased again
@@ -75,23 +83,29 @@ class TestArtificialSphericalExpansion:
     device = "cpu"
     frames = ase.io.read('tests/datasets/artificial.extxyz', ':')
     all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
-    structures = ase_atoms_to_tensordict(frames)
     with open("tests/data/expansion_coeffs-artificial-hypers.json", "r") as f:
         hypers = json.load(f)
+
+    transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"])]
+    dataset = InMemoryDataset(frames, transformers)
+    loader = DataLoader(dataset, batch_size=len(frames), collate_fn=collate_nl)
+    batch = next(iter(loader))
+    batch.pop("positions")
+    batch.pop("cell")
 
     def test_vector_expansion_coeffs(self):
         tm_ref = equistore.core.io.load_custom_array("tests/data/vector_expansion_coeffs-artificial-data.npz", equistore.core.io.create_torch_array)
         tm_ref = sort_tm(tm_ref)
         vector_expansion = VectorExpansion(self.hypers, self.all_species, device=self.device)
         with torch.no_grad():
-            tm = sort_tm(vector_expansion.forward(self.structures))
+            tm = sort_tm(vector_expansion.forward(**self.batch))
         assert equistore.operations.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
 
     def test_spherical_expansion_coeffs(self):
         tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-artificial-data.npz", equistore.core.io.create_torch_array)
         spherical_expansion_calculator = SphericalExpansion(self.hypers, self.all_species, device=self.device)
         with torch.no_grad():
-            tm = spherical_expansion_calculator.forward(self.structures)
+            tm = spherical_expansion_calculator.forward(**self.batch)
         # The absolute accuracy is a bit smaller than in the ethanol case
         # I presume it is because we use 5 frames instead of just one
         assert equistore.operations.allclose(tm_ref, tm, atol=3e-5, rtol=1e-5)
@@ -110,7 +124,7 @@ class TestArtificialSphericalExpansion:
                 )
             )
         with torch.no_grad():
-            tm = spherical_expansion_calculator.forward(self.structures)
+            tm = spherical_expansion_calculator.forward(**self.batch)
         assert equistore.operations.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
 
 ### these util functions will be removed once lab-cosmo/equistore/pull/281 is merged
