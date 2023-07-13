@@ -48,7 +48,7 @@ class TestEthanol1SphericalExpansion:
 
 class TestAlchemicalSphericalExpansion:
     device = "cpu"
-    frames = ase.io.read('datasets/alchemical.xyz', ':1')
+    frames = ase.io.read('datasets/alchemical.xyz', ':2')
     all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
     structures = ase_atoms_to_tensordict(frames)
     with open("tests/data/expansion_coeffs-alchemical_01-hypers.json", "r") as f:
