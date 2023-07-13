@@ -25,7 +25,7 @@ class TestEthanol1SphericalExpansion:
         with torch.no_grad():
             tm = vector_expansion.forward(self.structures)
         # default types are float32 so we set accuracy to 1e-7
-        equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
+        assert equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
 
     def test_spherical_expansion_coeffs(self):
         tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-ethanol1_0-data.npz", equistore.core.io.create_torch_array)
@@ -33,7 +33,7 @@ class TestEthanol1SphericalExpansion:
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(self.structures)
         # default types are float32 so we set accuracy to 1e-7
-        equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
+        assert equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
 
     def test_spherical_expansion_coeffs_alchemical(self):
         with open("tests/data/expansion_coeffs-ethanol1_0-alchemical-hypers.json", "r") as f:
@@ -44,7 +44,7 @@ class TestEthanol1SphericalExpansion:
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(self.structures)
         # default types are float32 so we set accuracy to 1e-7
-        equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
+        assert equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
 
 class TestAlchemicalSphericalExpansion:
     device = "cpu"
@@ -60,7 +60,7 @@ class TestAlchemicalSphericalExpansion:
         with torch.no_grad():
             tm = vector_expansion.forward(self.structures)
         # default types are float32 so we set accuracy to 1e-7
-        equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
+        assert equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
 
     def test_spherical_expansion_coeffs(self):
         tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-alchemical_01-data.npz", equistore.core.io.create_torch_array)
@@ -68,7 +68,7 @@ class TestAlchemicalSphericalExpansion:
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(self.structures)
         # default types are float32 so we set accuracy to 1e-7
-        equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
+        assert equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
 
     def test_spherical_expansion_coeffs_alchemical(self):
         with open("tests/data/expansion_coeffs-alchemical_01-alchemical-hypers.json", "r") as f:
@@ -79,4 +79,4 @@ class TestAlchemicalSphericalExpansion:
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(self.structures)
         # default types are float32 so we set accuracy to 1e-7
-        equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
+        assert equistore.operations.allclose(tm_ref, tm, atol=1e-7, rtol=1e-7)
