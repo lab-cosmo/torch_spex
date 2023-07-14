@@ -25,7 +25,7 @@ def Jn_zeros(n, nt):
     return zeros_j
 
 
-def get_le_spliner(E_max, r_cut, device):
+def get_le_spliner(E_max, r_cut, normalize, device):
 
     l_big = 50
     n_big = 50
@@ -68,7 +68,10 @@ def get_le_spliner(E_max, r_cut, device):
         R = np.zeros_like(r)
         for i in range(r.shape[0]):
             R[i] = R_nl(n, el, r[i])
-        return N_nl(n, el) * R * r_cut ** (-1.5)
+        return_array = N_nl(n, el) * R * r_cut ** (-1.5)
+        if normalize:
+            return_array /= np.sqrt( (4/3)*np.pi*r_cut**3 ) # normalize by square root of sphere volume
+        return return_array
 
     normalization_check_integral, _ = sp.integrate.quadrature(
         lambda x: laplacian_eigenstate_basis(2, x) ** 2 * x**2,
