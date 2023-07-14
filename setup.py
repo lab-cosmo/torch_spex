@@ -20,7 +20,7 @@ setup(
     name='torch_spex',
     packages = find_packages(),
     install_requires=[
-        'sphericart[torch]@git+https://github.com/lab-cosmo/sphericart.git',
+        'sphericart[torch]@git+https://github.com/lab-cosmo/sphericart.git@ecf4145', # prebuild wheels don't work
         'numpy',
         'ase',
         'torch',
