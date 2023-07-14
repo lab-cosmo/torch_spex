@@ -25,7 +25,7 @@ setup(
         'ase',
         'torch',
         'scipy',
-        'equistore@git+https://github.com/lab-cosmo/equistore.git@c022fde',
+        'equistore@https://github.com/lab-cosmo/equistore/archive/c022fde.zip',
     ],
     dependency_links = dependency_links
 )
