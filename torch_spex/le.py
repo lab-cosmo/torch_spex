@@ -1,4 +1,3 @@
-import ase
 import numpy as np
 import scipy as sp
 import scipy.optimize
@@ -79,10 +78,10 @@ def get_le_spliner(E_max, r_cut, normalize, device):
         r_cut,
         maxiter = 200
     )
+    if normalize:
+        normalization_check_integral /= (4/3)*np.pi*r_cut**3
     if abs(normalization_check_integral - 1) > 1e-6:
-        warnings.warn("Normalization check needs to be close to 1,",
-                      f" but is {normalization_check_integral}",
-                      scipy.linalg.LinAlgWarning)
+        raise ValueError("normalization of radial basis FAILED")
 
     def laplacian_eigenstate_basis_derivative(index, r):
         delta = 1e-6

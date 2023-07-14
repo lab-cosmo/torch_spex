@@ -1,4 +1,5 @@
 import torch
+from .neighbor_list import get_neighbor_list
 
 
 class NormalizedActivationFunction(torch.nn.Module):
@@ -62,3 +63,16 @@ def normalize_true(module):
 
 def normalize_false(module):
     return module
+
+
+def get_average_number_of_neighbors(structures, r_cut):
+    # Meant to be used on the training set
+    n_total_centers = 0
+    n_total_pairs = 0
+    for structure in structures:
+        centers, _, _ = get_neighbor_list(structure.positions, structure.pbc, structure.cell, r_cut)
+        n_total_pairs += centers.shape[0]
+        n_total_centers += structure.get_atomic_numbers().shape[0]
+    # remember that the total number of pairs is double-counted. This is what we're after
+    return n_total_pairs/n_total_centers
+
