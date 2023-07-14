@@ -28,7 +28,7 @@ class TestEthanol1SphericalExpansion:
         # we need to sort both computed and reference pair expansion coeffs,
         # because ase.neighborlist can get different neighborlist order for some reasons
         tm_ref = sort_tm(tm_ref)
-        vector_expansion = VectorExpansion(self.hypers, self.all_species, device="cpu")
+        vector_expansion = VectorExpansion(self.hypers, self.all_species, device=self.device)
         with torch.no_grad():
             tm = sort_tm(vector_expansion.forward(self.structures))
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
@@ -38,7 +38,7 @@ class TestEthanol1SphericalExpansion:
 
     def test_spherical_expansion_coeffs(self):
         tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-ethanol1_0-data.npz", equistore.core.io.create_torch_array)
-        spherical_expansion_calculator = SphericalExpansion(self.hypers, self.all_species)
+        spherical_expansion_calculator = SphericalExpansion(self.hypers, self.all_species, device=self.device)
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(self.structures)
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
@@ -51,7 +51,7 @@ class TestEthanol1SphericalExpansion:
             hypers = json.load(f)
         tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-ethanol1_0-alchemical-seed0-data.npz", equistore.core.io.create_torch_array)
         torch.manual_seed(0)
-        spherical_expansion_calculator = SphericalExpansion(hypers, self.all_species)
+        spherical_expansion_calculator = SphericalExpansion(hypers, self.all_species, device=self.device)
         # Because setting seed seems not be enough to get the same initial combination matrix
         # as in the reference values, we set the combination matrix manually
         with torch.no_grad():
