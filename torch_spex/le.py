@@ -70,7 +70,7 @@ def get_le_spliner(E_max, r_cut, normalize, device):
             R[i] = R_nl(n, el, r[i])
         return_array = N_nl(n, el) * R * r_cut ** (-1.5)
         if normalize:
-            return_array /= np.sqrt( (4/3)*np.pi*r_cut**3 ) # normalize by square root of sphere volume
+            return_array *= np.sqrt( (4/3)*np.pi*r_cut**3 ) # normalize by square root of sphere volume
         return return_array
 
     normalization_check_integral, _ = sp.integrate.quadrature(
