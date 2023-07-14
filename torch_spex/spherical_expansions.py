@@ -2,13 +2,11 @@ import copy
 
 import numpy as np
 import torch
-import ase
-from ase.neighborlist import primitive_neighbor_list
-import equistore
 from equistore import TensorMap, Labels, TensorBlock
 import sphericart.torch
 
 from .radial_basis import RadialBasis
+from .neighbor_list import get_neighbor_list
 from typing import Dict, List
 
 class SphericalExpansion(torch.nn.Module):
@@ -143,6 +141,8 @@ class SphericalExpansion(torch.nn.Module):
             for a_i in self.all_species:
                 where_ai = torch.LongTensor(np.where(ai_new_indices == a_i)[0]).to(densities_l.device)
                 densities_ai_l = torch.index_select(densities_l, 0, where_ai)
+                if self.normalize:
+                    densities_ai_l *= self.normalization_factor
                 labels.append([a_i, l, 1])
                 blocks.append(
                     TensorBlock(
@@ -208,9 +208,14 @@ class VectorExpansion(torch.nn.Module):
         super().__init__()
 
         self.hypers = hypers
-        # radial basis needs to know cutoff so we pass it
+        self.normalize = True if "normalize" in hypers else False
+        if self.normalize:
+            avg_num_neighbors = hypers["normalize"]
+            self.normalization_factor = 1.0/np.sqrt(avg_num_neighbors)
+        # radial basis needs to know cutoff so we pass it, as well as whether to normalize or not
         hypers_radial_basis = copy.deepcopy(hypers["radial basis"])
         hypers_radial_basis["r_cut"] = hypers["cutoff radius"]
+        hypers_radial_basis["normalize"] = self.normalize
         if "alchemical" in self.hypers:
             self.is_alchemical = True
             self.n_pseudo_species = self.hypers["alchemical"]
@@ -336,30 +341,4 @@ def get_cartesian_vectors(structures: Dict[str, torch.Tensor], cutoff_radius: fl
         properties = Labels.single()
     )
 
-    return block 
-
-
-def get_neighbor_list(positions, pbc, cell, cutoff_radius):
-
-    centers, neighbors, unit_cell_shift_vectors = ase.neighborlist.primitive_neighbor_list(
-        quantities="ijS",
-        pbc=pbc,
-        cell=cell,
-        positions=positions,
-        cutoff=cutoff_radius,
-        self_interaction=True,
-        use_scaled_positions=False,
-    )
-
-    pairs_to_throw = np.logical_and(centers == neighbors, np.all(unit_cell_shift_vectors == 0, axis=1))
-    pairs_to_keep = np.logical_not(pairs_to_throw)
-
-    centers = centers[pairs_to_keep]
-    neighbors = neighbors[pairs_to_keep]
-    unit_cell_shift_vectors = unit_cell_shift_vectors[pairs_to_keep]
-
-    centers = torch.LongTensor(centers)
-    neighbors = torch.LongTensor(neighbors)
-    unit_cell_shift_vectors = torch.tensor(unit_cell_shift_vectors, dtype=torch.get_default_dtype())
-
-    return centers, neighbors, unit_cell_shift_vectors
+    return block

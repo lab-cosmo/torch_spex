@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from typing import Dict, List
 import ase
+from .neighbor_list import get_neighbor_list
 
 def ase_atoms_to_tensordict(atoms_list : List[ase.Atoms], device : torch.device = "cpu") -> Dict[str, torch.Tensor]:
     """

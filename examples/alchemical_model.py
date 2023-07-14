@@ -5,6 +5,7 @@ from torch_spex.forces import compute_forces
 from torch_spex.structures import ase_atoms_to_tensordict
 from torch_spex.spherical_expansions import SphericalExpansion
 from power_spectrum import PowerSpectrum
+from torch_spex.normalize import get_average_number_of_neighbors
 
 # Conversions
 
@@ -42,7 +43,7 @@ dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
 force_weight = 1.0
 n_test = 1000
-n_train = 10000
+n_train = 1000
 r_cut = 5.0
 optimizer_name = "Adam"
 
@@ -71,10 +72,10 @@ n_pseudo = 4
 hypers = {
     "alchemical": n_pseudo,
     "cutoff radius": r_cut,
+    "normalize": get_average_number_of_neighbors(train_structures, r_cut),
     "radial basis": {
         "r_cut": r_cut,
         "E_max": 300,
-        "normalize": True
     }
 }
 
@@ -153,8 +154,7 @@ class Model(torch.nn.Module):
         
         if optimizer_name == "Adam":
             total_loss = 0.0
-            for i, batch in enumerate(data_loader):
-                #print(i)
+            for batch in data_loader:
                 optimizer.zero_grad()
                 predicted_energies, predicted_forces = model(batch)
                 energies = torch.tensor([structure.info[target_key] for structure in batch], device=device)*energy_conversion_factor 
@@ -221,7 +221,7 @@ model = Model(hypers, all_species, do_forces=do_forces).to(device)
 
 if optimizer_name == "Adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3) 
-    batch_size = 16  # Batch for training speed
+    batch_size = 8  # Batch for training speed
 else:
     optimizer = torch.optim.LBFGS(model.parameters(), line_search_fn="strong_wolfe", history_size=128)
     batch_size = 128  # Batch for memory
