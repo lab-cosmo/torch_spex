@@ -14,7 +14,7 @@ class RadialBasis(torch.nn.Module):
         else:
             normalize = normalize_false
 
-        self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"], device=device)
+        self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["normalize"], device=device)
         self.l_max = len(self.n_max_l) - 1
         self.radial_transform = (lambda x: x)
         if "alchemical" in hypers:
