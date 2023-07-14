@@ -24,5 +24,9 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - run:  pip install tox
 
+    # uncomment for debug purposes
+    #- name: Setup upterm session
+    #  uses: lhotari/action-upterm@v1
+
     - name: run Python tests
       run: tox -e tests
