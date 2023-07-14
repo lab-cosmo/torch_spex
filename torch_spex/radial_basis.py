@@ -39,7 +39,7 @@ class RadialBasis(torch.nn.Module):
                 normalize(torch.nn.Linear(32, 32, bias=False)),
                 normalize(torch.nn.SiLU()),
                 normalize(torch.nn.Linear(32, self.n_max_l[l], bias=False))
-            ) for aj in range(all_species_names) for l in range(self.l_max+1)
+            ) for aj in all_species_names for l in range(self.l_max+1)
         })
 
     def forward(self, r, samples_metadata):

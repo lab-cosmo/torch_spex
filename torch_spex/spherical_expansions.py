@@ -148,11 +148,7 @@ class SphericalExpansion(torch.nn.Module):
                 where_ai = torch.LongTensor(np.where(ai_new_indices == a_i)[0]).to(densities_l.device)
                 densities_ai_l = torch.index_select(densities_l, 0, where_ai)
                 if self.normalize:
-                    if l == 0:
-                        # Very high correlations for l = 0: use a stronger normalization
-                        densities_ai_l *= self.normalization_factor_0
-                    else:
-                        densities_ai_l *= self.normalization_factor
+                    densities_ai_l *= self.normalization_factor
                 labels.append([a_i, l, 1])
                 blocks.append(
                     TensorBlock(
@@ -219,6 +215,9 @@ class VectorExpansion(torch.nn.Module):
 
         self.hypers = hypers
         self.normalize = True if "normalize" in hypers else False
+        if self.normalize:
+            avg_num_neighbors = hypers["normalize"]
+            self.normalization_factor = 1.0/np.sqrt(avg_num_neighbors)
         # radial basis needs to know cutoff so we pass it, as well as whether to normalize or not
         hypers_radial_basis = copy.deepcopy(hypers["radial basis"])
         hypers_radial_basis["r_cut"] = hypers["cutoff radius"]

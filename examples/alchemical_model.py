@@ -5,8 +5,7 @@ from torch_spex.forces import compute_forces
 from torch_spex.structures import ase_atoms_to_tensordict
 from torch_spex.spherical_expansions import SphericalExpansion
 from power_spectrum import PowerSpectrum
-from torch_spex.normalize import get_average_number_of_neighbors, normalize_true, normalize_false
-import equistore
+from torch_spex.normalize import get_average_number_of_neighbors
 
 # Conversions
 
@@ -44,9 +43,9 @@ force_conversion = "NO_CONVERSION"
 target_key = "energy"
 dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
-force_weight = 10.0
-n_test = 200
-n_train = 2000
+force_weight = 1.0
+n_test = 1000
+n_train = 1000
 r_cut = 5.0
 optimizer_name = "Adam"
 
@@ -77,10 +76,10 @@ print("normalize", normalize)
 hypers = {
     "alchemical": n_pseudo,
     "cutoff radius": r_cut,
+    "normalize": get_average_number_of_neighbors(train_structures, r_cut),
     "radial basis": {
         "r_cut": r_cut,
         "E_max": 300,
-        "normalize": True
     }
 }
 if not normalize:

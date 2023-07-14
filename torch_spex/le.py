@@ -79,7 +79,7 @@ def get_le_spliner(E_max, r_cut, normalize, device):
         maxiter = 200
     )
     if normalize:
-        normalization_check_integral /= (1/3)*r_cut**3
+        normalization_check_integral /= (4/3)*np.pi*r_cut**3
     if abs(normalization_check_integral - 1) > 1e-6:
         raise ValueError("normalization of radial basis FAILED")
 
