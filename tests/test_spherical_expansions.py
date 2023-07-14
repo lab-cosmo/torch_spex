@@ -12,7 +12,10 @@ import ase.io
 from torch_spex.spherical_expansions import VectorExpansion, SphericalExpansion
 from torch_spex.structures import ase_atoms_to_tensordict
 
-class TestSphericalExpansion:
+class TestEthanol1SphericalExpansion:
+    """
+    Tests on the ethanol1 dataset
+    """
     device = "cpu"
     frames = ase.io.read('datasets/rmd17/ethanol1.extxyz', ':1')
     all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
