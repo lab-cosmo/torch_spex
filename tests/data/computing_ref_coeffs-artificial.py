@@ -1,4 +1,4 @@
-# reference data was produced using torch_spex commit 3a7ef8a
+# reference data was produced using torch_spex commit b9261bf2
 
 
 from torch_spex.spherical_expansions import VectorExpansion, SphericalExpansion
@@ -17,7 +17,7 @@ all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
 hypers = {
     "cutoff radius": 3,
     "radial basis": {
-        "E_max": 30
+        "E_max": 40
     }
 }
 with open("expansion_coeffs-artificial-hypers.json", "w") as f:
