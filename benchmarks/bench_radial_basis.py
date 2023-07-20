@@ -66,6 +66,7 @@ class RadialBasisSuiteFloat32:
         radial_basis = self.radial_basis_calculator(self.r, self.samples_metadata)
 
 class RadialBasisSuiteFloat64:
+
     version=VERSION
 
     def setup(self):
