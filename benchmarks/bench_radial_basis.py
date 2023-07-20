@@ -1,7 +1,9 @@
 import os
 
+# PR COMMENT: for debug purposes, will be removed before merge
 print("os.getcwd()", os.getcwd(), flush=True)
 print("os.environ", os.environ, flush=True)
+
 import numpy as np
 import torch
 from torch_spex.structures import InMemoryDataset, TransformerNeighborList, collate_nl
@@ -21,7 +23,20 @@ elif os.getenv("TOX_WORK_DIR") is not None:
 else:
     TORCH_SPEX_PATH = "./"
 
+# in the CI we want to be only sure that it works and not run a
+# full benchmark
+if os.getenv("DRY_RUN"):
+    DRY_RUN = True
+
+# When changing the benchmark code the version automatically changes
+# to prevent this we manually set the version, for more information
+# read https://asv.readthedocs.io/en/stable/benchmarks.html
+VERSION = "0.0.0"
+
 class RadialBasisSuiteFloat32:
+
+    version=VERSION
+
     def setup(self):
         torch.set_default_dtype(torch.float32)
         hypers_radial_basis = {'E_max': 250, 'r_cut': 5.0, 'alchemical': 4}
@@ -51,6 +66,8 @@ class RadialBasisSuiteFloat32:
         radial_basis = self.radial_basis_calculator(self.r, self.samples_metadata)
 
 class RadialBasisSuiteFloat64:
+    version=VERSION
+
     def setup(self):
         torch.set_default_dtype(torch.float64)
         hypers_radial_basis = {'E_max': 250, 'r_cut': 5.0, 'alchemical': 4}
