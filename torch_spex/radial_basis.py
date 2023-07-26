@@ -20,7 +20,7 @@ class RadialBasis(torch.nn.Module):
         if "alchemical" in hypers:
             self.is_alchemical = True
             self.n_pseudo_species = hypers["alchemical"]
-            self.combination_matrix = normalize(torch.nn.Linear(all_species.shape[0], self.n_pseudo_species, bias=False))
+            self.combination_matrix = normalize("embedding", torch.nn.Linear(all_species.shape[0], self.n_pseudo_species, bias=False))
             self.all_species_labels = equistore.Labels(
                 names = ["species_neighbor"],
                 values = all_species[:, None]
@@ -31,13 +31,13 @@ class RadialBasis(torch.nn.Module):
         all_species_names = range(self.n_pseudo_species) if "alchemical" in hypers else all_species
         self.radial_mlps = torch.nn.ModuleDict({
             str(l)+"_"+str(aj) : torch.nn.Sequential(
-                normalize(torch.nn.Linear(self.n_max_l[l], 32, bias=False)),
-                normalize(torch.nn.SiLU()),
-                normalize(torch.nn.Linear(32, 32, bias=False)),
-                normalize(torch.nn.SiLU()),
-                normalize(torch.nn.Linear(32, 32, bias=False)),
-                normalize(torch.nn.SiLU()),
-                normalize(torch.nn.Linear(32, self.n_max_l[l], bias=False))
+                normalize("linear_no_bias", torch.nn.Linear(self.n_max_l[l], 32, bias=False)),
+                normalize("activation", torch.nn.SiLU()),
+                normalize("linear_no_bias", torch.nn.Linear(32, 32, bias=False)),
+                normalize("activation", torch.nn.SiLU()),
+                normalize("linear_no_bias", torch.nn.Linear(32, 32, bias=False)),
+                normalize("activation", torch.nn.SiLU()),
+                normalize("linear_no_bias", torch.nn.Linear(32, self.n_max_l[l], bias=False))
             ) for aj in all_species_names for l in range(self.l_max+1)
         })
 
