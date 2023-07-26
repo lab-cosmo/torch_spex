@@ -72,6 +72,10 @@ class SphericalExpansion(torch.nn.Module):
         super().__init__()
 
         self.hypers = hypers
+        self.normalize = True if "normalize" in hypers else False
+        if self.normalize:
+            avg_num_neighbors = hypers["normalize"]
+            self.normalization_factor = 1.0/np.sqrt(avg_num_neighbors)
         self.all_species = np.array(all_species, dtype=np.int32)  # convert potential list to np.array
         self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species, device=device)
 
@@ -209,9 +213,6 @@ class VectorExpansion(torch.nn.Module):
 
         self.hypers = hypers
         self.normalize = True if "normalize" in hypers else False
-        if self.normalize:
-            avg_num_neighbors = hypers["normalize"]
-            self.normalization_factor = 1.0/np.sqrt(avg_num_neighbors)
         # radial basis needs to know cutoff so we pass it, as well as whether to normalize or not
         hypers_radial_basis = copy.deepcopy(hypers["radial basis"])
         hypers_radial_basis["r_cut"] = hypers["cutoff radius"]
@@ -241,6 +242,7 @@ class VectorExpansion(torch.nn.Module):
         radial_basis = self.radial_basis_calculator(r, samples_metadata)
 
         spherical_harmonics = self.spherical_harmonics_calculator.compute(bare_cartesian_vectors)  # Get the spherical harmonics
+        if self.normalize: spherical_harmonics *= np.sqrt(4*np.pi)
         spherical_harmonics = torch.split(spherical_harmonics, self.spherical_harmonics_split_list, dim=1)  # Split them into l chunks
 
         # Use broadcasting semantics to get the products in equistore shape
