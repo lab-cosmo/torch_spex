@@ -320,7 +320,6 @@ class VectorExpansion(torch.nn.Module):
         )
         samples_metadata = cartesian_vectors.samples  # This can be needed by the radial basis to do alchemical contractions
         radial_basis = self.radial_basis_calculator(r, samples_metadata)
-        breakpoint()
 
         spherical_harmonics = self.spherical_harmonics_calculator.compute(bare_cartesian_vectors)  # Get the spherical harmonics
         spherical_harmonics = torch.split(spherical_harmonics, self.spherical_harmonics_split_list, dim=1)  # Split them into l chunks
