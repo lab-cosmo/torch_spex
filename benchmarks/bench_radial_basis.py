@@ -1,8 +1,8 @@
 import os
 
 # PR COMMENT: for debug purposes, will be removed before merge
-print("os.getcwd()", os.getcwd(), flush=True)
-print("os.environ", os.environ, flush=True)
+#print("PR DEBUG INFO: os.getcwd()", os.getcwd(), flush=True)
+#print("PR DEBUG INFO: os.environ", os.environ, flush=True)
 
 import numpy as np
 import torch
@@ -24,7 +24,8 @@ else:
     TORCH_SPEX_PATH = "./"
 
 # in the CI we want to be only sure that it works and not run a
-# full benchmark
+# full benchmark, so we might reduce the number of frames used when
+# this flag is true
 if os.getenv("DRY_RUN"):
     DRY_RUN = True
 
@@ -34,6 +35,7 @@ if os.getenv("DRY_RUN"):
 VERSION = "0.0.0"
 
 class RadialBasisSuiteFloat32:
+    timeout = 600.0
 
     version=VERSION
 
@@ -97,3 +99,13 @@ class RadialBasisSuiteFloat64:
 
     def time_alchemical_dataset(self):
         radial_basis = self.radial_basis_calculator(self.r, self.samples_metadata)
+
+if __name__ == '__main__':
+    # PR COMMENT this is to manually verify things, but should not be needed in the final version
+    bench_float32 = RadialBasisSuiteFloat32()
+    bench_float32.setup()
+    bench_float32.time_alchemical_dataset()
+
+    bench_float64 = RadialBasisSuiteFloat64()
+    bench_float64.setup()
+    bench_float64.time_alchemical_dataset()
