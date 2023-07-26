@@ -77,7 +77,6 @@ class SphericalExpansion(torch.nn.Module):
         if self.normalize:
             avg_num_neighbors = hypers["normalize"]
             self.normalization_factor = 1.0/np.sqrt(avg_num_neighbors)
-            self.normalization_factor_0 = 1.0/avg_num_neighbors**(3/4)
         self.all_species = np.array(all_species, dtype=np.int32)  # convert potential list to np.array
         self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species, device=device)
 
@@ -215,9 +214,6 @@ class VectorExpansion(torch.nn.Module):
 
         self.hypers = hypers
         self.normalize = True if "normalize" in hypers else False
-        if self.normalize:
-            avg_num_neighbors = hypers["normalize"]
-            self.normalization_factor = 1.0/np.sqrt(avg_num_neighbors)
         # radial basis needs to know cutoff so we pass it, as well as whether to normalize or not
         hypers_radial_basis = copy.deepcopy(hypers["radial basis"])
         hypers_radial_basis["r_cut"] = hypers["cutoff radius"]

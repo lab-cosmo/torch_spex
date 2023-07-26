@@ -5,7 +5,8 @@ from torch_spex.forces import compute_forces
 from torch_spex.structures import ase_atoms_to_tensordict
 from torch_spex.spherical_expansions import SphericalExpansion
 from power_spectrum import PowerSpectrum
-from torch_spex.normalize import get_average_number_of_neighbors
+from torch_spex.normalize import get_average_number_of_neighbors, normalize_true, normalize_false
+import equistore
 
 # Conversions
 
@@ -43,9 +44,10 @@ force_conversion = "NO_CONVERSION"
 target_key = "energy"
 dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
-force_weight = 1.0
-n_test = 1000
-n_train = 1000
+force_weight = 100.0
+print("100 force weight")
+n_test = 200
+n_train = 200
 r_cut = 5.0
 optimizer_name = "Adam"
 
@@ -76,7 +78,6 @@ print("normalize", normalize)
 hypers = {
     "alchemical": n_pseudo,
     "cutoff radius": r_cut,
-    "normalize": get_average_number_of_neighbors(train_structures, r_cut),
     "radial basis": {
         "r_cut": r_cut,
         "E_max": 300,
@@ -128,7 +129,7 @@ class Model(torch.nn.Module):
     def forward(self, structures, is_training=True):
 
         # print("Transforming structures")
-        # print(structures[0].get_atomic_numbers())
+        print(structures[0].get_atomic_numbers())
         structures = ase_atoms_to_tensordict(structures, device=device)
         energies = torch.zeros((structures["n_structures"].item(),), device=device, dtype=torch.get_default_dtype())
 
@@ -219,7 +220,6 @@ class Model(torch.nn.Module):
         structure_indices = []
         for a_i in self.all_species:
             block = tmap.block(a_i=a_i)
-            # print(block.values)
             features = block.values.squeeze(dim=1)
             structure_indices.append(block.samples["structure"])
             atomic_energies.append(
@@ -294,7 +294,6 @@ predicted_test_forces *= train_uncentered_std"""
 
 print(torch.mean(train_energies), get_2_mom(train_energies))
 print(torch.mean(predicted_train_energies), get_2_mom(predicted_train_energies))
-exit()
 
 print()
 print(f"Before training")
