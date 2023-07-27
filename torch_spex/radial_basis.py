@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import equistore
 from .le import get_le_spliner
+from .physical_le import get_physical_le_spliner
 from .normalize import normalize_true, normalize_false
 
 
@@ -15,7 +16,12 @@ class RadialBasis(torch.nn.Module):
         else:
             normalize = normalize_false
 
-        self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["normalize"], device=device)
+        if hypers["type"] == "le":
+            self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["normalize"], device=device)
+        elif hypers["type"] == "physical":
+            self.n_max_l, self.spliner = get_physical_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["scale"], hypers["normalize"], hypers["cost_trade_off"], device=device)
+        else:
+            raise ValueError("unsupported radial basis")
         self.l_max = len(self.n_max_l) - 1
         self.radial_transform = (lambda x: x)
         if "alchemical" in hypers:
