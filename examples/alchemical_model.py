@@ -37,6 +37,8 @@ torch.set_default_dtype(torch.float64)
 
 print("DESCRIPTION")
 
+print("DESCRIPTION")
+
 # Unpack options
 random_seed = 123123
 energy_conversion = "NO_CONVERSION"
@@ -44,10 +46,9 @@ force_conversion = "NO_CONVERSION"
 target_key = "energy"
 dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
-force_weight = 100.0
-print("100 force weight")
+force_weight = 10.0
 n_test = 200
-n_train = 200
+n_train = 2000
 r_cut = 5.0
 optimizer_name = "Adam"
 
@@ -129,7 +130,7 @@ class Model(torch.nn.Module):
     def forward(self, structures, is_training=True):
 
         # print("Transforming structures")
-        print(structures[0].get_atomic_numbers())
+        # print(structures[0].get_atomic_numbers())
         structures = ase_atoms_to_tensordict(structures, device=device)
         energies = torch.zeros((structures["n_structures"].item(),), device=device, dtype=torch.get_default_dtype())
 
@@ -220,6 +221,7 @@ class Model(torch.nn.Module):
         structure_indices = []
         for a_i in self.all_species:
             block = tmap.block(a_i=a_i)
+            # print(block.values)
             features = block.values.squeeze(dim=1)
             structure_indices.append(block.samples["structure"])
             atomic_energies.append(
@@ -294,6 +296,7 @@ predicted_test_forces *= train_uncentered_std"""
 
 print(torch.mean(train_energies), get_2_mom(train_energies))
 print(torch.mean(predicted_train_energies), get_2_mom(predicted_train_energies))
+exit()
 
 print()
 print(f"Before training")

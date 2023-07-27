@@ -83,11 +83,17 @@ class PowerSpectrum(torch.nn.Module):
 
                 data[:, nu_plus_one_count:nu_plus_one_count+selected_features[l].shape[0]] = cg*torch.sum(block.values[:, :, selected_features[l][:, 0]]*block.values[:, :, selected_features[l][:, 1]], dim = 1, keepdim = False)
                 from torch_spex.normalize import get_2_mom
-                """print(l)
+                """
+                print(l)
+                print(torch.mean(block.values[:, :, selected_features[l][:, 0]]))
+                print(torch.mean(block.values[:, :, selected_features[l][:, 1]]))
+                print(torch.mean(block.values[:, :, selected_features[l][:, 0]]*block.values[:, :, selected_features[l][:, 1]]))
+                print(torch.mean(data[:, nu_plus_one_count:nu_plus_one_count+selected_features[l].shape[0]]))
                 print(get_2_mom(block.values[:, :, selected_features[l][:, 0]]))
                 print(get_2_mom(block.values[:, :, selected_features[l][:, 1]]))
                 print(get_2_mom(block.values[:, :, selected_features[l][:, 0]]*block.values[:, :, selected_features[l][:, 1]]))
-                print(get_2_mom(data[:, nu_plus_one_count:nu_plus_one_count+selected_features[l].shape[0]]))"""
+                print(get_2_mom(data[:, nu_plus_one_count:nu_plus_one_count+selected_features[l].shape[0]]))
+                """
 
 
                 nu_plus_one_count += selected_features[l].shape[0]
