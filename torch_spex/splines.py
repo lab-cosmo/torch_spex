@@ -30,7 +30,7 @@ def generate_splines(
     def value_evaluator_2D(positions):
         values = []
         for index in range(max_index):
-            value = radial_basis(index, positions)
+            value = radial_basis(index, np.array(positions))
             values.append(value)
         values = torch.tensor(np.array(values))
         values = values.T
@@ -40,7 +40,7 @@ def generate_splines(
     def derivative_evaluator_2D(positions):
         derivatives = []
         for index in range(max_index):
-            derivative = radial_basis_derivatives(index, positions)
+            derivative = radial_basis_derivatives(index, np.array(positions))
             derivatives.append(derivative)
         derivatives = torch.tensor(np.array(derivatives))
         derivatives = derivatives.T
