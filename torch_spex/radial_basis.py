@@ -1,6 +1,7 @@
 import torch
 import equistore
 from .le import get_le_spliner
+from .physical_le import get_physical_le_spliner
 from .normalize import normalize_true, normalize_false
 
 
@@ -14,7 +15,12 @@ class RadialBasis(torch.nn.Module):
         else:
             normalize = normalize_false
 
-        self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["normalize"], device=device)
+        if hypers["type"] == "le":
+            self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["normalize"], device=device)
+        elif hypers["type"] == "physical":
+            self.n_max_l, self.spliner = get_physical_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["scale"], hypers["normalize"], hypers["cost_trade_off"], device=device)
+        else:
+            raise ValueError("unsupported radial basis")
         self.l_max = len(self.n_max_l) - 1
         self.radial_transform = (lambda x: x)
         if "alchemical" in hypers:
@@ -73,42 +79,3 @@ class RadialBasis(torch.nn.Module):
         return radial_basis
 
 
-class SphericalBesselFirstKind(torch.autograd.Function):
-
-    @staticmethod
-    def forward(ctx, l, x):
-
-        assert(len(x.shape) == 1)
-        output = spherical_bessel.first_kind_forward(l, x)
-        ctx.l = l
-        ctx.save_for_backward(x)
-        return output
-
-    @staticmethod
-    def backward(ctx, d_loss_d_output):
-
-        l = ctx.l
-        x, = ctx.saved_tensors
-        d_output_d_x = spherical_bessel.first_kind_backward(l, x)
-
-        return None, d_loss_d_output * d_output_d_x
-
-
-class SphericalBesselSecondKind(torch.autograd.Function):
-
-    @staticmethod
-    def forward(ctx, l, x):
-
-        output = spherical_bessel.second_kind_forward(l, x)
-        ctx.l = l
-        ctx.save_for_backward(x)
-        return output
-
-    @staticmethod
-    def backward(ctx, d_loss_d_output):
-
-        l = ctx.l
-        x, = ctx.saved_tensors
-        d_output_d_x = spherical_bessel.second_kind_backward(l, x)
-
-        return None, d_loss_d_output * d_output_d_x
