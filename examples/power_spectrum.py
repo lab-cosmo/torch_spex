@@ -44,6 +44,8 @@ class PowerSpectrum(torch.nn.Module):
                     for q_nu in range(block.values.shape[-1]):
                         for q_1 in range(block.values.shape[-1]):
 
+                            # if q_1 == q_nu: continue
+
                             properties_list = [[block.properties[name][q_nu] for name in block.properties.names] + [block.properties[name][q_1] for name in block.properties.names[:-1]] + [0]]
                             properties_values.append(properties_list)
                             selected_features[l].append([q_nu, q_1])
@@ -81,11 +83,17 @@ class PowerSpectrum(torch.nn.Module):
 
                 data[:, nu_plus_one_count:nu_plus_one_count+selected_features[l].shape[0]] = cg*torch.sum(block.values[:, :, selected_features[l][:, 0]]*block.values[:, :, selected_features[l][:, 1]], dim = 1, keepdim = False)
                 from torch_spex.normalize import get_2_mom
-                """print(l)
+                """
+                print(l)
+                print(torch.mean(block.values[:, :, selected_features[l][:, 0]]))
+                print(torch.mean(block.values[:, :, selected_features[l][:, 1]]))
+                print(torch.mean(block.values[:, :, selected_features[l][:, 0]]*block.values[:, :, selected_features[l][:, 1]]))
+                print(torch.mean(data[:, nu_plus_one_count:nu_plus_one_count+selected_features[l].shape[0]]))
                 print(get_2_mom(block.values[:, :, selected_features[l][:, 0]]))
                 print(get_2_mom(block.values[:, :, selected_features[l][:, 1]]))
                 print(get_2_mom(block.values[:, :, selected_features[l][:, 0]]*block.values[:, :, selected_features[l][:, 1]]))
-                print(get_2_mom(data[:, nu_plus_one_count:nu_plus_one_count+selected_features[l].shape[0]]))"""
+                print(get_2_mom(data[:, nu_plus_one_count:nu_plus_one_count+selected_features[l].shape[0]]))
+                """
 
 
                 nu_plus_one_count += selected_features[l].shape[0]
