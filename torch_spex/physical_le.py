@@ -186,7 +186,9 @@ def get_physical_le_spliner(E_max, r_cut, r0, normalize, cost_trade_off, device)
                 ret += coeffs[l][m, n]*b(l, m, 1-np.exp(-r/r0), z_nl, precomputed_N_nl)
             else:
                 ret += coeffs[l][m, n]*b(l, m, (1-np.exp(-r/r0))*(1.0-np.exp(-(r/rnn)**2)), z_nl, precomputed_N_nl)
-        if normalize: ret *= np.sqrt( (4/3)*np.pi*r_cut**3 ) # normalize by square root of sphere volume
+        if normalize:
+            # normalize by square root of sphere volume, excluding sqrt(4pi) which is included in the SH
+            ret *= np.sqrt( (1/3)*r_cut**3 )
         return ret
 
     def function_for_splining_derivative(n, l, r):
@@ -196,7 +198,9 @@ def get_physical_le_spliner(E_max, r_cut, r0, normalize, cost_trade_off, device)
                 ret += coeffs[l][m, n]*db(l, m, 1-np.exp(-r/r0), z_nl, precomputed_N_nl)*np.exp(-r/r0)/r0
             else:
                 ret += coeffs[l][m, n]*db(l, m, (1-np.exp(-r/r0))*(1.0-np.exp(-(r/rnn)**2)), z_nl, precomputed_N_nl)*((1.0-np.exp(-(r/rnn)**2))*np.exp(-r/r0)/r0+(1-np.exp(-r/r0))*np.exp(-(r/rnn)**2)*2*r/rnn**2)
-        if normalize: ret *= np.sqrt( (4/3)*np.pi*r_cut**3 ) # normalize by square root of sphere volume
+        if normalize:
+            # normalize by square root of sphere volume, excluding sqrt(4pi) which is included in the SH
+            ret *= np.sqrt( (1/3)*r_cut**3 )
         return ret
 
     if rs:

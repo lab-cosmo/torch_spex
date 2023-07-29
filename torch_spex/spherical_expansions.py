@@ -76,6 +76,7 @@ class SphericalExpansion(torch.nn.Module):
         if self.normalize:
             avg_num_neighbors = hypers["normalize"]
             self.normalization_factor = 1.0/np.sqrt(avg_num_neighbors)
+            self.normalization_factor_0 = 1.0/avg_num_neighbors**(3/4)
         self.all_species = np.array(all_species, dtype=np.int32)  # convert potential list to np.array
         self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species, device=device)
 
@@ -146,7 +147,11 @@ class SphericalExpansion(torch.nn.Module):
                 where_ai = torch.LongTensor(np.where(ai_new_indices == a_i)[0]).to(densities_l.device)
                 densities_ai_l = torch.index_select(densities_l, 0, where_ai)
                 if self.normalize:
-                    densities_ai_l *= self.normalization_factor
+                    if l == 0:
+                        # Very high correlations for l = 0: use a stronger normalization
+                        densities_ai_l *= self.normalization_factor_0
+                    else:
+                        densities_ai_l *= self.normalization_factor
                 labels.append([a_i, l, 1])
                 blocks.append(
                     TensorBlock(
