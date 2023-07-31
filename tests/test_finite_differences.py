@@ -16,6 +16,7 @@ def test_autograd():
         "alchemical": 4,
         "cutoff radius": 4.0,
         "radial basis": {
+            "type": "le",
             "E_max": 300
         }
     }

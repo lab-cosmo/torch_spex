@@ -53,6 +53,7 @@ class SphericalExpansion(torch.nn.Module):
     >>> hypers = {
     ...     "cutoff radius": 3,
     ...     "radial basis": {
+    ...         "type": "le",
     ...         "E_max": 20
     ...     },
     ...     "alchemical": 1,
