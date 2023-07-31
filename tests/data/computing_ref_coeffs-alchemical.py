@@ -1,8 +1,8 @@
-# reference data was produced using commit c0a60120e438b3fe44180aa7ecf5c43fd34799c1
-# computes reference points using ethanlo dataset
+# reference data was produced using commit c76f261364146517fe59eefb455383e124a4cab9
+# computes reference points using alchemical dataset
 
 from torch_spex.spherical_expansions import VectorExpansion, SphericalExpansion
-from torch_spex.structures import Structures
+from torch_spex.structures import ase_atoms_to_tensordict
 
 import torch
 import numpy as np
@@ -10,30 +10,29 @@ import json
 import equistore
 import ase.io
 
-frames = ase.io.read('../../datasets/rmd17/ethanol1.extxyz', ':1')
-structures = Structures(frames)
+frames = ase.io.read('../../datasets/alchemical.xyz', ':2')
+structures = ase_atoms_to_tensordict(frames)
 all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
 
 hypers = {
-    "cutoff radius": 3,
+    "cutoff radius": 4,
     "radial basis": {
-        "r_cut": 3,
         "E_max": 30
     }
 }
-with open("expansion_coeffs-ethanol1_0-hypers.json", "w") as f:
+with open("expansion_coeffs-alchemical_01-hypers.json", "w") as f:
     json.dump(hypers, f)
 
-vector_expansion = VectorExpansion(hypers, device="cpu")
+vector_expansion = VectorExpansion(hypers, all_species, device="cpu")
 vexp_coeffs = vector_expansion.forward(structures)
-equistore.save("vector_expansion_coeffs-ethanol1_0-data.npz", vexp_coeffs)
+equistore.save("vector_expansion_coeffs-alchemical_01-data.npz", vexp_coeffs)
 
 spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
 sexp_coeffs = spherical_expansion_calculator.forward(structures)
-equistore.save("spherical_expansion_coeffs-ethanol1_0-data.npz", sexp_coeffs)
+equistore.save("spherical_expansion_coeffs-alchemical_01-data.npz", sexp_coeffs)
 
 hypers["alchemical"] = 2
-with open("expansion_coeffs-ethanol1_0-alchemical-hypers.json", "w") as f:
+with open("expansion_coeffs-alchemical_01-alchemical-hypers.json", "w") as f:
     json.dump(hypers, f)
 
 
@@ -42,4 +41,4 @@ spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
 
 with torch.no_grad():
     sexp_coeffs = spherical_expansion_calculator.forward(structures)
-equistore.save("spherical_expansion_coeffs-ethanol1_0-alchemical-seed0-data.npz", sexp_coeffs)
+equistore.save("spherical_expansion_coeffs-alchemical_01-alchemical-seed0-data.npz", sexp_coeffs)
