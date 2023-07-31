@@ -37,8 +37,6 @@ torch.set_default_dtype(torch.float64)
 
 print("DESCRIPTION")
 
-print("DESCRIPTION")
-
 # Unpack options
 random_seed = 123123
 energy_conversion = "NO_CONVERSION"
