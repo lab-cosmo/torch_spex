@@ -42,7 +42,7 @@ class Bla:
     #number = 10
 
     def setup(self):
-        a = 0
+        self.a = 0
         #time.sleep(0.1)
         #with open("/home/alexgo/code/torch_spex/benchsetup.out",  "a") as f:
         #    f.seek(0, os.SEEK_END)
