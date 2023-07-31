@@ -80,6 +80,7 @@ hypers = {
     "radial basis": {
         "r_cut": r_cut,
         "E_max": 300,
+        "normalize": True
     }
 }
 if not normalize:

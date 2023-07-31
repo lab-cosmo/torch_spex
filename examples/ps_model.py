@@ -73,9 +73,8 @@ hypers = {
         "type": "le",
         "scale": 2.0,
         "r_cut": r_cut,
-        "E_max": 500,
-        "normalize": True,
-        "cost_trade_off": False
+        "E_max": 200,
+        "normalize": False
     }
 }
 
