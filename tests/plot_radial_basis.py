@@ -24,7 +24,7 @@ structures = get_dummy_structures(r)
 hypers_spherical_expansion = {
     "cutoff radius": 6.0,
     "radial basis": {
-        "r_cut": 6.0,
+        "type": "le",
         "E_max": 200 
     }
 }
