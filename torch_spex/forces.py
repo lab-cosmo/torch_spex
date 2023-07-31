@@ -9,8 +9,8 @@ def compute_forces(
         grad_outputs=torch.ones_like(energy),
         retain_graph=is_training,
         create_graph=is_training,
-    )[0]
-    return -1 * gradient
+    )
+    return [-single_structure_gradient for single_structure_gradient in gradient]
 
 
 if __name__ == "__main__":

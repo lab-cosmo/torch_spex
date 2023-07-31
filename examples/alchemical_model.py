@@ -2,8 +2,9 @@ import numpy as np
 import torch
 from dataset import get_dataset_slices
 from torch_spex.forces import compute_forces
-from torch_spex.structures import ase_atoms_to_tensordict
+from torch_spex.structures import InMemoryDataset, TransformerNeighborList, collate_nl
 from torch_spex.spherical_expansions import SphericalExpansion
+from torch_spex.atomic_composition import AtomicComposition
 from power_spectrum import PowerSpectrum
 
 # Conversions
@@ -41,8 +42,8 @@ target_key = "energy"
 dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
 force_weight = 1.0
-n_test = 1000
-n_train = 10000
+n_test = 200
+n_train = 200
 r_cut = 5.0
 optimizer_name = "Adam"
 
@@ -110,17 +111,18 @@ class Model(torch.nn.Module):
         # """
         self.do_forces = do_forces
 
-    def forward(self, structures, is_training=True):
+    def forward(self, structure_batch, is_training=True):
 
         # print("Transforming structures")
-        structures = ase_atoms_to_tensordict(structures, device=device)
-        energies = torch.zeros((structures["n_structures"].item(),), device=device, dtype=torch.get_default_dtype())
+        n_structures = len(structure_batch["positions"])
+        energies = torch.zeros((n_structures,), device=device, dtype=torch.get_default_dtype())
 
         if self.do_forces:
-            structures["positions"].requires_grad = True
+            for structure_positions in structure_batch["positions"]:
+                structure_positions.requires_grad = True
 
         # print("Calculating spherical expansion")
-        spherical_expansion = self.spherical_expansion_calculator(structures)
+        spherical_expansion = self.spherical_expansion_calculator(**structure_batch)
         ps = self.ps_calculator(spherical_expansion)
 
         # print("Calculating energies")
@@ -128,7 +130,7 @@ class Model(torch.nn.Module):
 
         # print("Computing forces by backpropagation")
         if self.do_forces:
-            forces = compute_forces(energies, structures["positions"], is_training=is_training)
+            forces = compute_forces(energies, structure_batch["positions"], is_training=is_training)
         else:
             forces = None  # Or zero-dimensional tensor?
 
@@ -138,10 +140,12 @@ class Model(torch.nn.Module):
         
         predicted_energies = []
         predicted_forces = []
-        for i, batch in enumerate(data_loader):
+        for batch in data_loader:
+            batch.pop("energies")
+            batch.pop("forces")
             predicted_energies_batch, predicted_forces_batch = model(batch, is_training=False)
             predicted_energies.append(predicted_energies_batch)
-            predicted_forces.append(predicted_forces_batch)
+            predicted_forces.extend(predicted_forces_batch)  # the predicted forces for the batch are themselves a list
 
         predicted_energies = torch.concatenate(predicted_energies, dim=0)
         predicted_forces = torch.concatenate(predicted_forces, dim=0)
@@ -152,21 +156,19 @@ class Model(torch.nn.Module):
         
         if optimizer_name == "Adam":
             total_loss = 0.0
-            for i, batch in enumerate(data_loader):
-                #print(i)
+            for batch in data_loader:
+                energies = batch.pop("energies")
+                forces = batch.pop("forces")
                 optimizer.zero_grad()
                 predicted_energies, predicted_forces = model(batch)
-                energies = torch.tensor([structure.info[target_key] for structure in batch], device=device)*energy_conversion_factor 
 
-                comp = comp_calculator.compute(batch)
-                comp = comp.keys_to_properties(center_species_labels)
-                comp = torch.tensor(comp.block().values).to(device)
+                comp = comp_calculator_torch.compute(**batch)
                 energies -= comp @ c_comp
 
                 loss = get_sse(predicted_energies, energies)
                 if do_forces:
-                    forces = torch.tensor(np.concatenate([structure.get_forces() for structure in batch], axis=0))*force_conversion_factor
                     forces = forces.to(device)
+                    predicted_forces = torch.concatenate(predicted_forces)
                     loss += force_weight * get_sse(predicted_forces, forces)
                 loss.backward()
                 optimizer.step()
@@ -176,18 +178,17 @@ class Model(torch.nn.Module):
                 optimizer.zero_grad()
                 total_loss = 0.0
                 for batch in data_loader:
+                    energies = batch.pop("energies")
+                    forces = batch.pop("forces")
                     predicted_energies, predicted_forces = model(batch)
-                    energies = torch.tensor([structure.info[target_key] for structure in batch], device=device)*energy_conversion_factor
                     
-                    comp = comp_calculator.compute(batch)
-                    comp = comp.keys_to_properties(center_species_labels)
-                    comp = torch.tensor(comp.block().values).to(device)
+                    comp = comp_calculator_torch.compute(**batch)
                     energies -= comp @ c_comp
 
                     loss = get_sse(predicted_energies, energies)
                     if do_forces:
-                        forces = torch.tensor(np.concatenate([structure.get_forces() for structure in batch], axis=0))*force_conversion_factor
                         forces = forces.to(device)
+                        predicted_forces = torch.concatenate(predicted_forces)
                         loss += force_weight * get_sse(predicted_forces, forces)
                     loss.backward()
                     total_loss += loss.item()
@@ -225,10 +226,21 @@ else:
     optimizer = torch.optim.LBFGS(model.parameters(), line_search_fn="strong_wolfe", history_size=128)
     batch_size = 128  # Batch for memory
 
-train_data_loader = torch.utils.data.DataLoader(train_structures, batch_size=batch_size, shuffle=True, collate_fn=(lambda x: x))
+print("Precomputing neighborlists")
 
-predict_train_data_loader = torch.utils.data.DataLoader(train_structures, batch_size=32, shuffle=False, collate_fn=(lambda x: x))
-predict_test_data_loader = torch.utils.data.DataLoader(test_structures, batch_size=32, shuffle=False, collate_fn=(lambda x: x))
+transformers_train_data_loader = [TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device)]
+train_dataset = InMemoryDataset(train_structures, transformers_train_data_loader)
+train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_nl)
+
+transformers_predict_train_data_loader = [TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device)]
+predict_train_dataset = InMemoryDataset(train_structures, transformers_predict_train_data_loader)
+predict_train_data_loader = torch.utils.data.DataLoader(predict_train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
+
+transformers_predict_test_data_loader = [TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device)]
+predict_test_dataset = InMemoryDataset(test_structures, transformers_predict_train_data_loader)
+predict_test_data_loader = torch.utils.data.DataLoader(predict_test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
+
+print("Finished neighborlists")
 
 # with torch.autograd.set_detect_anomaly(True):
 predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
@@ -239,6 +251,7 @@ test_energies = torch.tensor([structure.info[target_key] for structure in test_s
 test_energies = test_energies.to(device)
 
 # Linear fit for one-body energies:
+comp_calculator_torch = AtomicComposition(all_species)
 import rascaline
 import equistore
 center_species_labels = equistore.Labels(
