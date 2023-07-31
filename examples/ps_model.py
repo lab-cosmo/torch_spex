@@ -39,10 +39,10 @@ force_conversion = "KCAL_MOL_TO_MEV"
 target_key = "energy"
 dataset_path = "../datasets/rmd17/ethanol1.extxyz"
 do_forces = True
-force_weight = 0.01
-n_test = 50
-n_train = 200
-r_cut = 4.0
+force_weight = 10.0
+n_test = 200
+n_train = 50
+r_cut = 6.0
 optimizer_name = "Adam"
 
 np.random.seed(random_seed)
@@ -69,9 +69,13 @@ train_structures, test_structures = get_dataset_slices(dataset_path, train_slice
 hypers = {
     "cutoff radius": r_cut,
     "radial basis": {
+        "mlp": True,
+        "type": "le",
+        "scale": 2.0,
         "r_cut": r_cut,
-        "E_max": 200,
-        "normalize": False
+        "E_max": 500,
+        "normalize": True,
+        "cost_trade_off": False
     }
 }
 
@@ -87,6 +91,7 @@ class Model(torch.nn.Module):
         self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species, device=device)
         self.ps_calculator = PowerSpectrum(all_species)
         n_max = self.spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.n_max_l
+        print(n_max)
         l_max = len(n_max) - 1
         n_feat = sum([n_max[l]**2 * len(all_species)**2 for l in range(l_max+1)])
         """
@@ -200,8 +205,8 @@ else:
 
 data_loader = torch.utils.data.DataLoader(train_structures, batch_size=batch_size, shuffle=True, collate_fn=(lambda x: x))
 
-with torch.autograd.set_detect_anomaly(True):
-    predicted_train_energies, predicted_train_forces = model(train_structures, is_training=False)
+# with torch.autograd.set_detect_anomaly(True):
+predicted_train_energies, predicted_train_forces = model(train_structures, is_training=False)
 predicted_test_energies, predicted_test_forces = model(test_structures, is_training=False)
 train_energies = torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor
 train_energies = train_energies.to(device)
