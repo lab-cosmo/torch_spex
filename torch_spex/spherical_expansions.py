@@ -55,7 +55,8 @@ class SphericalExpansion(torch.nn.Module):
     ...     "cutoff radius": 3,
     ...     "radial basis": {
     ...         "type": "le",
-    ...         "E_max": 20
+    ...         "E_max": 20.0,
+    ...         "mlp": false
     ...     },
     ...     "alchemical": 1,
     ... }

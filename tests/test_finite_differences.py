@@ -23,7 +23,8 @@ def test_autograd():
         "cutoff radius": 4.0,
         "radial basis": {
             "type": "le",
-            "E_max": 300
+            "E_max": 300,
+            "mlp": False
         }
     }
     all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
