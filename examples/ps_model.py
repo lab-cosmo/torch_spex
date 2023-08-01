@@ -69,12 +69,12 @@ train_structures, test_structures = get_dataset_slices(dataset_path, train_slice
 hypers = {
     "cutoff radius": r_cut,
     "radial basis": {
-        "mlp": True,
+        "mlp": False,
         "type": "le",
         "scale": 2.0,
         "r_cut": r_cut,
         "E_max": 500,
-        "normalize": True,
+        "normalize": False,
         "cost_trade_off": False
     }
 }
@@ -141,8 +141,7 @@ class Model(torch.nn.Module):
         
         if optimizer_name == "Adam":
             total_loss = 0.0
-            for i, batch in enumerate(data_loader):
-                #print(i)
+            for batch in data_loader:
                 optimizer.zero_grad()
                 predicted_energies, predicted_forces = model(batch)
                 energies = torch.tensor([structure.info[target_key] for structure in batch])*energy_conversion_factor 
@@ -205,7 +204,6 @@ else:
 
 data_loader = torch.utils.data.DataLoader(train_structures, batch_size=batch_size, shuffle=True, collate_fn=(lambda x: x))
 
-# with torch.autograd.set_detect_anomaly(True):
 predicted_train_energies, predicted_train_forces = model(train_structures, is_training=False)
 predicted_test_energies, predicted_test_forces = model(test_structures, is_training=False)
 train_energies = torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor

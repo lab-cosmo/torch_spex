@@ -46,7 +46,7 @@ dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
 force_weight = 10.0
 n_test = 200
-n_train = 2000
+n_train = 200
 r_cut = 5.0
 optimizer_name = "Adam"
 
@@ -72,14 +72,17 @@ else:
 train_structures, test_structures = get_dataset_slices(dataset_path, train_slice, test_slice)
 
 n_pseudo = 4
-normalize = True
+normalize = False
 print("normalize", normalize)
 hypers = {
     "alchemical": n_pseudo,
     "cutoff radius": r_cut,
     "radial basis": {
+        "type": "le",
         "r_cut": r_cut,
         "E_max": 300,
+        "normalize": False,
+        "mlp": False
     }
 }
 if not normalize:
@@ -138,7 +141,7 @@ class Model(torch.nn.Module):
         # print("Calculating spherical expansion")
         spherical_expansion = self.spherical_expansion_calculator(structures)
         ps = self.ps_calculator(spherical_expansion)
-        ps = equistore.divide(ps, 10.0) # BUG ????????????????????????//dafsdjf;asdkjfhladsjhbf
+        if normalize: ps = equistore.divide(ps, 10.0) # BUG ????????????????????????//dafsdjf;asdkjfhladsjhbf
 
         # print("Calculating energies")
         self._apply_layer(energies, ps, self.nu2_model)
@@ -226,7 +229,6 @@ class Model(torch.nn.Module):
                 layer[str(a_i)](features).squeeze(dim=-1)
             )
         atomic_energies = torch.concat(atomic_energies)
-        print(torch.mean(torch.abs(atomic_energies)))
         structure_indices = torch.LongTensor(np.concatenate(structure_indices))
         # print("Before aggregation", torch.mean(atomic_energies), get_2_mom(atomic_energies))
         
@@ -291,10 +293,6 @@ predicted_test_energies, predicted_test_forces = model.predict_epoch(predict_tes
 predicted_test_energies *= train_uncentered_std
 predicted_train_forces *= train_uncentered_std
 predicted_test_forces *= train_uncentered_std"""
-
-print(torch.mean(train_energies), get_2_mom(train_energies))
-print(torch.mean(predicted_train_energies), get_2_mom(predicted_train_energies))
-exit()
 
 print()
 print(f"Before training")
