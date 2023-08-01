@@ -65,11 +65,7 @@ class SphericalExpansion(torch.nn.Module):
     >>> dataset = InMemoryDataset([h2o], transformers)
     >>> loader = DataLoader(dataset, batch_size=1, collate_fn=collate_nl)
     >>> batch = next(iter(loader))
-    >>> # we need to pop positions and cell, because they are only important for
-    >>> # for postcomputation of gradients and not part of the input arguments
-    >>> _ = batch.pop("positions")
-    >>> _ = batch.pop("cell")
-    >>> spherical_expansion = SphericalExpansion(hypers, [1,8], device="cpu")
+    >>> spherical_expansion = SphericalExpansion(hypers, [1, 8], device="cpu")
     >>> spherical_expansion.forward(**batch)
     TensorMap with 2 blocks
     keys: a_i  lam  sigma
