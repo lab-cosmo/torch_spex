@@ -39,7 +39,7 @@ torch.set_default_dtype(torch.float64)
 print("DESCRIPTION")
 
 # Unpack options
-random_seed = 12312
+random_seed = 123123
 energy_conversion = "NO_CONVERSION"
 force_conversion = "NO_CONVERSION"
 target_key = "energy"
@@ -48,7 +48,7 @@ do_forces = True
 force_weight = 10.0
 n_test = 200
 n_train = 200
-r_cut = 5.0
+r_cut = 6.0
 optimizer_name = "Adam"
 
 np.random.seed(random_seed)
@@ -56,7 +56,6 @@ torch.manual_seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-device = "cpu"
 print(f"Training on {device}")
 
 conversions = get_conversions()
@@ -74,17 +73,18 @@ else:
 train_structures, test_structures = get_dataset_slices(dataset_path, train_slice, test_slice)
 
 n_pseudo = 4
-normalize = False
+normalize = True
 print("normalize", normalize)
 hypers = {
     "alchemical": n_pseudo,
     "cutoff radius": r_cut,
     "radial basis": {
-        "type": "le",
-        "r_cut": r_cut,
-        "E_max": 300,
-        "normalize": False,
-        "mlp": False
+        "mlp": True,
+        "type": "physical",
+        "scale": 3.0,
+        "E_max": 500,
+        "normalize": True,
+        "cost_trade_off": False
     }
 }
 if not normalize:
@@ -252,15 +252,17 @@ print("Precomputing neighborlists")
 
 transformers = [
     TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device),
-    TransformerProperty("energies", lambda frame: torch.tensor([frame.info["energy"]], dtype=torch.get_default_dtype(), device=device)),
-    TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device))
+    TransformerProperty("energies", lambda frame: torch.tensor([frame.info["energy"]], dtype=torch.get_default_dtype(), device=device)*energy_conversion_factor),
 ]
-train_dataset = InMemoryDataset(train_structures, transformers)
-test_dataset = InMemoryDataset(test_structures, transformers)
+if do_forces: transformers.append(TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device)*force_conversion_factor))
 
+predict_train_dataset = InMemoryDataset(train_structures, transformers)
+predict_test_dataset = InMemoryDataset(test_structures, transformers)
+train_dataset = InMemoryDataset(train_structures, transformers)  # avoid sharing tensors between different dataloaders
+
+predict_train_data_loader = torch.utils.data.DataLoader(predict_train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
+predict_test_data_loader = torch.utils.data.DataLoader(predict_test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
 train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_nl)
-predict_train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
-predict_test_data_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
 
 print("Finished neighborlists")
 
@@ -272,24 +274,19 @@ train_energies = train_energies.to(device)
 test_energies = torch.tensor([structure.info[target_key] for structure in test_structures])*energy_conversion_factor
 test_energies = test_energies.to(device)
 
-train_energies -= train_comp @ c_comp
-test_energies -= test_comp @ c_comp
-train_uncentered_std = torch.sqrt(get_2_mom(train_energies))
-
 if do_forces:
     train_forces = torch.tensor(np.concatenate([structure.get_forces() for structure in train_structures], axis=0))*force_conversion_factor
     train_forces = train_forces.to(device)
     test_forces = torch.tensor(np.concatenate([structure.get_forces() for structure in test_structures], axis=0))*force_conversion_factor
     test_forces = test_forces.to(device)
 
-comp_calculator_torch = AtomicComposition(all_species)
-
+comp_calculator = AtomicComposition(all_species)
 train_comp = []
 for batch in predict_train_data_loader:
     batch.pop("energies")
     batch.pop("forces")
     train_comp.append(
-        comp_calculator_torch.compute(**batch)
+        comp_calculator.compute(**batch)
     )
 train_comp = torch.concatenate(train_comp)
 c_comp = torch.linalg.solve(train_comp.T @ train_comp, train_comp.T @ train_energies)

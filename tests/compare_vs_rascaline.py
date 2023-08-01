@@ -36,6 +36,8 @@ torch_structures.pop("forces")
 hypers_torch_spex = {
     "cutoff radius": a,
     "radial basis": {
+        "type": "le",
+        "mlp": False,
         "r_cut": a,
         "E_max": E_max,
         "normalize": False

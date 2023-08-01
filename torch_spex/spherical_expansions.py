@@ -56,7 +56,7 @@ class SphericalExpansion(torch.nn.Module):
     ...     "radial basis": {
     ...         "type": "le",
     ...         "E_max": 20.0,
-    ...         "mlp": false
+    ...         "mlp": False
     ...     },
     ...     "alchemical": 1,
     ... }
