@@ -35,7 +35,7 @@ def get_sse(first, second):
 torch.set_default_dtype(torch.float64)
 
 # Unpack options
-random_seed = 123123
+random_seed = 12312
 energy_conversion = "NO_CONVERSION"
 force_conversion = "NO_CONVERSION"
 target_key = "energy"
@@ -89,10 +89,10 @@ class Model(torch.nn.Module):
         super().__init__()
         self.all_species = all_species
         self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species, device=device)
-        self.ps_calculator = PowerSpectrum(all_species)
         n_max = self.spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.n_max_l
         l_max = len(n_max) - 1
         n_feat = sum([n_max[l]**2 * n_pseudo**2 for l in range(l_max+1)])
+        self.ps_calculator = PowerSpectrum(l_max, all_species)
         """
         self.nu2_model = torch.nn.ModuleDict({
             str(a_i): torch.nn.Linear(n_feat, 1, bias=False) for a_i in self.all_species

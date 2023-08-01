@@ -46,6 +46,7 @@ r_cut = 6.0
 optimizer_name = "Adam"
 
 np.random.seed(random_seed)
+torch.manual_seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -84,11 +85,11 @@ class Model(torch.nn.Module):
         super().__init__()
         self.all_species = all_species
         self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species, device=device)
-        self.ps_calculator = PowerSpectrum(all_species)
         n_max = self.spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.n_max_l
         print(n_max)
         l_max = len(n_max) - 1
         n_feat = sum([n_max[l]**2 * len(all_species)**2 for l in range(l_max+1)])
+        self.ps_calculator = PowerSpectrum(l_max, all_species)
         """
         self.nu2_model = torch.nn.ModuleDict({
             str(a_i): torch.nn.Linear(n_feat, 1, bias=False) for a_i in self.all_species
