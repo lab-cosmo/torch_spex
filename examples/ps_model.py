@@ -140,13 +140,13 @@ class Model(torch.nn.Module):
         predicted_forces = []
         for batch in data_loader:
             batch.pop("energies")
-            batch.pop("forces")
+            if self.do_forces: batch.pop("forces")
             predicted_energies_batch, predicted_forces_batch = model(batch, is_training=False)
             predicted_energies.append(predicted_energies_batch)
-            predicted_forces.extend(predicted_forces_batch)  # the predicted forces for the batch are themselves a list
+            if self.do_forces: predicted_forces.extend(predicted_forces_batch)  # the predicted forces for the batch are themselves a list
 
         predicted_energies = torch.concatenate(predicted_energies, dim=0)
-        predicted_forces = torch.concatenate(predicted_forces, dim=0)
+        if self.do_forces: predicted_forces = torch.concatenate(predicted_forces, dim=0)
         return predicted_energies, predicted_forces
 
     def train_epoch(self, data_loader, force_weight):
@@ -156,10 +156,10 @@ class Model(torch.nn.Module):
             for batch in data_loader:
                 optimizer.zero_grad()
                 energies = batch.pop("energies")
-                forces = batch.pop("forces")
+                if self.do_forces: forces = batch.pop("forces")
                 predicted_energies, predicted_forces = model(batch)
                 loss = get_sse(predicted_energies, energies)
-                if do_forces:
+                if self.do_forces:
                     predicted_forces = torch.concatenate(predicted_forces)
                     loss += force_weight * get_sse(predicted_forces, forces)
                 loss.backward()
@@ -171,7 +171,7 @@ class Model(torch.nn.Module):
                 for train_structures in data_loader:
                     predicted_energies, predicted_forces = model(train_structures)
                     energies = batch.pop("energies")
-                    forces = batch.pop("forces")
+                    if self.do_forces: forces = batch.pop("forces")
                     loss = get_sse(predicted_energies, energies)
                     if do_forces:
                         predicted_forces = torch.concatenate(predicted_forces)
@@ -217,15 +217,17 @@ print("Precomputing neighborlists")
 
 transformers = [
     TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device),
-    TransformerProperty("energies", lambda frame: torch.tensor([frame.info["energy"]], dtype=torch.get_default_dtype(), device=device)),
-    TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device))
+    TransformerProperty("energies", lambda frame: torch.tensor([frame.info["energy"]], dtype=torch.get_default_dtype(), device=device)*energy_conversion_factor),
 ]
-train_dataset = InMemoryDataset(train_structures, transformers)
-test_dataset = InMemoryDataset(test_structures, transformers)
+if do_forces: transformers.append(TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device)*force_conversion_factor))
 
+predict_train_dataset = InMemoryDataset(train_structures, transformers)
+predict_test_dataset = InMemoryDataset(test_structures, transformers)
+train_dataset = InMemoryDataset(train_structures, transformers)  # avoid sharing tensors between different dataloaders
+
+predict_train_data_loader = torch.utils.data.DataLoader(predict_train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
+predict_test_data_loader = torch.utils.data.DataLoader(predict_test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
 train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_nl)
-predict_train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
-predict_test_data_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
 
 print("Finished neighborlists")
 
@@ -248,7 +250,10 @@ for epoch in range(1000):
     predicted_test_energies, predicted_test_forces = model.predict_epoch(predict_test_data_loader)
 
     print()
-    print(f"Epoch number {epoch}, Total loss: {get_sse(predicted_train_energies, train_energies)+force_weight*get_sse(predicted_train_forces, train_forces)}")
+    if do_forces:
+        print(f"Epoch number {epoch}, Total loss: {get_sse(predicted_train_energies, train_energies)+force_weight*get_sse(predicted_train_forces, train_forces)}")
+    else:
+        print(f"Epoch number {epoch}, Total loss: {get_sse(predicted_train_energies, train_energies)}")
     print(f"Energy errors: Train RMSE: {get_rmse(predicted_train_energies, train_energies)}, Train MAE: {get_mae(predicted_train_energies, train_energies)}, Test RMSE: {get_rmse(predicted_test_energies, test_energies)}, Test MAE: {get_mae(predicted_test_energies, test_energies)}")
     if do_forces:
         print(f"Force errors: Train RMSE: {get_rmse(predicted_train_forces, train_forces)}, Train MAE: {get_mae(predicted_train_forces, train_forces)}, Test RMSE: {get_rmse(predicted_test_forces, test_forces)}, Test MAE: {get_mae(predicted_test_forces, test_forces)}")

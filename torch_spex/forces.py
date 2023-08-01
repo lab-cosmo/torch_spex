@@ -1,8 +1,9 @@
 import torch
+from typing import List
 
 def compute_forces(
-    energy: torch.Tensor, positions: torch.Tensor, is_training=True
-) -> torch.Tensor:
+    energy: torch.Tensor, positions: List[torch.Tensor], is_training=True
+) -> List[torch.Tensor]:
     gradient = torch.autograd.grad(
         outputs=energy,
         inputs=positions,
