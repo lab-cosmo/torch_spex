@@ -27,7 +27,7 @@ def test_autograd():
     }
     all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
 
-    transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"], positions_requires_grad=True, cell_requires_grad=False)]
+    transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"])]
     dataset = InMemoryDataset(frames, transformers)
     #collate_fn = functools.partial(collate_nl, position_requires_grad=True, cell_requires_grad=False)
     loader = DataLoader(dataset, batch_size=len(frames), collate_fn=collate_nl)

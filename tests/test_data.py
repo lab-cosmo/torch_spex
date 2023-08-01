@@ -22,7 +22,7 @@ def test_in_memory_neighbor_list():
     dataset = InMemoryDataset(frames, transformers)
     loader = DataLoader(dataset, batch_size=n_structures, collate_fn=collate_nl)
     batch = next(iter(loader))
-    assert set(batch.keys()) == {'positions', 'species', 'cell', 'centers', 'pairs', 'cell_shifts', 'structure_centers', 'structure_pairs', 'direction_vectors','energy', 'forces'}
+    assert set(batch.keys()) == {'positions', 'species', 'cells', 'centers', 'pairs', 'cell_shifts', 'structure_centers', 'structure_pairs', 'structure_offsets', 'energy', 'forces'}
     assert len(batch['species']) == len(batch['centers']) == len(batch['structure_centers']) == len(batch['forces'])
-    assert len(batch['positions']) == len(batch['cell']) == n_structures == len(batch['energy'])
-    assert len(batch['pairs']) == len(batch['cell_shifts']) == len(batch['structure_pairs']) == len(batch['direction_vectors'])
+    assert len(batch['positions']) == len(batch['cells']) == n_structures == len(batch['energy'])
+    assert len(batch['pairs']) == len(batch['cell_shifts']) == len(batch['structure_pairs']) == len(batch['structure_offsets'])
