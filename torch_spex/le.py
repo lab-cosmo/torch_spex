@@ -1,4 +1,3 @@
-import ase
 import numpy as np
 import scipy as sp
 import scipy.optimize
@@ -25,7 +24,7 @@ def Jn_zeros(n, nt):
     return zeros_j
 
 
-def get_le_spliner(E_max, r_cut, device):
+def get_le_spliner(E_max, r_cut, normalize, device):
 
     l_big = 50
     n_big = 50
@@ -68,7 +67,11 @@ def get_le_spliner(E_max, r_cut, device):
         R = np.zeros_like(r)
         for i in range(r.shape[0]):
             R[i] = R_nl(n, el, r[i])
-        return N_nl(n, el) * R * r_cut ** (-1.5)
+        return_array = N_nl(n, el) * R * r_cut ** (-1.5)
+        if normalize:
+            # normalize by square root of sphere volume, excluding sqrt(4pi) which is included in the SH
+            return_array *= np.sqrt( (1/3)*r_cut**3 )
+        return return_array
 
     normalization_check_integral, _ = sp.integrate.quadrature(
         lambda x: laplacian_eigenstate_basis(2, x) ** 2 * x**2,
@@ -76,10 +79,10 @@ def get_le_spliner(E_max, r_cut, device):
         r_cut,
         maxiter = 200
     )
+    if normalize:
+        normalization_check_integral /= (1/3)*r_cut**3
     if abs(normalization_check_integral - 1) > 1e-6:
-        warnings.warn("Normalization check needs to be close to 1,",
-                      f" but is {normalization_check_integral}",
-                      scipy.linalg.LinAlgWarning)
+        raise ValueError("normalization of radial basis FAILED")
 
     def laplacian_eigenstate_basis_derivative(index, r):
         delta = 1e-6

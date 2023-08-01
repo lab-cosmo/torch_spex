@@ -22,7 +22,9 @@ def test_autograd():
         "alchemical": 4,
         "cutoff radius": 4.0,
         "radial basis": {
-            "E_max": 300
+            "type": "le",
+            "E_max": 300,
+            "mlp": False
         }
     }
     all_species = np.unique(np.hstack([frame.numbers for frame in frames]))

@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from typing import Dict, List, Tuple, TypeVar, Callable
 import ase
+from .neighbor_list import get_neighbor_list
 
 import abc
 AtomicStructure = TypeVar('AtomicStructure')

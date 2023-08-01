@@ -36,11 +36,16 @@ torch_structures.pop("forces")
 hypers_torch_spex = {
     "cutoff radius": a,
     "radial basis": {
-        "E_max": E_max
+        "type": "le",
+        "mlp": False,
+        "r_cut": a,
+        "E_max": E_max,
+        "normalize": False
     }
 }
 calculator = SphericalExpansion(hypers_torch_spex, [1, 6, 8])
 spherical_expansion_coefficients_torch_spex = calculator(**torch_structures)
+
 all_species = np.unique(spherical_expansion_coefficients_torch_spex.keys["a_i"])
 
 l_max = 0

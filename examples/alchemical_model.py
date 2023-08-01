@@ -6,6 +6,8 @@ from torch_spex.structures import InMemoryDataset, TransformerNeighborList, Tran
 from torch_spex.spherical_expansions import SphericalExpansion
 from torch_spex.atomic_composition import AtomicComposition
 from power_spectrum import PowerSpectrum
+from torch_spex.normalize import get_average_number_of_neighbors, normalize_true, normalize_false
+import equistore
 
 # Conversions
 
@@ -34,8 +36,10 @@ def get_sse(first, second):
 
 torch.set_default_dtype(torch.float64)
 
+print("DESCRIPTION")
+
 # Unpack options
-random_seed = 12312
+random_seed = 123123
 energy_conversion = "NO_CONVERSION"
 force_conversion = "NO_CONVERSION"
 target_key = "energy"
@@ -44,7 +48,7 @@ do_forces = True
 force_weight = 10.0
 n_test = 200
 n_train = 200
-r_cut = 5.0
+r_cut = 6.0
 optimizer_name = "Adam"
 
 np.random.seed(random_seed)
@@ -52,7 +56,6 @@ torch.manual_seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-device = "cpu"
 print(f"Training on {device}")
 
 conversions = get_conversions()
@@ -70,14 +73,29 @@ else:
 train_structures, test_structures = get_dataset_slices(dataset_path, train_slice, test_slice)
 
 n_pseudo = 4
+normalize = True
+print("normalize", normalize)
 hypers = {
     "alchemical": n_pseudo,
     "cutoff radius": r_cut,
     "radial basis": {
-        "r_cut": r_cut,
-        "E_max": 300
+        "mlp": True,
+        "type": "physical",
+        "scale": 3.0,
+        "E_max": 500,
+        "normalize": True,
+        "cost_trade_off": False
     }
 }
+if not normalize:
+    normalize_func = normalize_false
+else:
+    hypers["normalize"] = get_average_number_of_neighbors(train_structures, r_cut)
+    print(hypers["normalize"])
+    normalize_func = normalize_true
+
+average_number_of_atoms = sum([structure.get_atomic_numbers().shape[0] for structure in train_structures])/len(train_structures)
+print("Average number of atoms per structure:", average_number_of_atoms)
 
 all_species = np.sort(np.unique(np.concatenate([train_structure.numbers for train_structure in train_structures] + [test_structure.numbers for test_structure in test_structures])))
 print(f"All species: {all_species}")
@@ -100,13 +118,13 @@ class Model(torch.nn.Module):
         """
         self.nu2_model = torch.nn.ModuleDict({
             str(a_i): torch.nn.Sequential(
-                torch.nn.Linear(n_feat, 256),
-                torch.nn.SiLU(),
-                torch.nn.Linear(256, 256),
-                torch.nn.SiLU(),
-                torch.nn.Linear(256, 256),
-                torch.nn.SiLU(),
-                torch.nn.Linear(256, 1)
+                normalize_func("linear_no_bias", torch.nn.Linear(n_feat, 256, bias=False)),
+                normalize_func("activation", torch.nn.SiLU()),
+                normalize_func("linear_no_bias", torch.nn.Linear(256, 256, bias=False)),
+                normalize_func("activation", torch.nn.SiLU()),
+                normalize_func("linear_no_bias", torch.nn.Linear(256, 256, bias=False)),
+                normalize_func("activation", torch.nn.SiLU()),
+                normalize_func("linear_no_bias", torch.nn.Linear(256, 1, bias=False))
             ) for a_i in self.all_species
         })
         # """
@@ -116,7 +134,6 @@ class Model(torch.nn.Module):
 
     def forward(self, structure_batch, is_training=True):
 
-        # print("Transforming structures")
         n_structures = len(structure_batch["positions"])
         energies = torch.zeros((n_structures,), device=device, dtype=torch.get_default_dtype())
 
@@ -127,9 +144,11 @@ class Model(torch.nn.Module):
         # print("Calculating spherical expansion")
         spherical_expansion = self.spherical_expansion_calculator(**structure_batch)
         ps = self.ps_calculator(spherical_expansion)
+        if normalize: ps = equistore.divide(ps, 10.0) # BUG ????????????????????????//dafsdjf;asdkjfhladsjhbf
 
         # print("Calculating energies")
         self._apply_layer(energies, ps, self.nu2_model)
+        if normalize: energies = energies / np.sqrt(average_number_of_atoms)
 
         comp = self.comp_calculator.compute(**structure_batch)
         energies += comp @ self.composition_coefficients
@@ -203,6 +222,7 @@ class Model(torch.nn.Module):
         structure_indices = []
         for a_i in self.all_species:
             block = tmap.block(a_i=a_i)
+            # print(block.values)
             features = block.values.squeeze(dim=1)
             structure_indices.append(block.samples["structure"])
             atomic_energies.append(
@@ -210,9 +230,10 @@ class Model(torch.nn.Module):
             )
         atomic_energies = torch.concat(atomic_energies)
         structure_indices = torch.LongTensor(np.concatenate(structure_indices))
+        # print("Before aggregation", torch.mean(atomic_energies), get_2_mom(atomic_energies))
         
         energies.index_add_(dim=0, index=structure_indices.to(device), source=atomic_energies)
-
+        # THIS IN-PLACE MODIFICATION HAS TO CHANGE!
 
     # def print_state()... Would print loss, train errors, validation errors, test errors, ...
 
@@ -231,15 +252,17 @@ print("Precomputing neighborlists")
 
 transformers = [
     TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device),
-    TransformerProperty("energies", lambda frame: torch.tensor([frame.info["energy"]], dtype=torch.get_default_dtype(), device=device)),
-    TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device))
+    TransformerProperty("energies", lambda frame: torch.tensor([frame.info["energy"]], dtype=torch.get_default_dtype(), device=device)*energy_conversion_factor),
 ]
-train_dataset = InMemoryDataset(train_structures, transformers)
-test_dataset = InMemoryDataset(test_structures, transformers)
+if do_forces: transformers.append(TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device)*force_conversion_factor))
 
+predict_train_dataset = InMemoryDataset(train_structures, transformers)
+predict_test_dataset = InMemoryDataset(test_structures, transformers)
+train_dataset = InMemoryDataset(train_structures, transformers)  # avoid sharing tensors between different dataloaders
+
+predict_train_data_loader = torch.utils.data.DataLoader(predict_train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
+predict_test_data_loader = torch.utils.data.DataLoader(predict_test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
 train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_nl)
-predict_train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
-predict_test_data_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
 
 print("Finished neighborlists")
 
@@ -257,14 +280,13 @@ if do_forces:
     test_forces = torch.tensor(np.concatenate([structure.get_forces() for structure in test_structures], axis=0))*force_conversion_factor
     test_forces = test_forces.to(device)
 
-comp_calculator_torch = AtomicComposition(all_species)
-
+comp_calculator = AtomicComposition(all_species)
 train_comp = []
 for batch in predict_train_data_loader:
     batch.pop("energies")
     batch.pop("forces")
     train_comp.append(
-        comp_calculator_torch.compute(**batch)
+        comp_calculator.compute(**batch)
     )
 train_comp = torch.concatenate(train_comp)
 c_comp = torch.linalg.solve(train_comp.T @ train_comp, train_comp.T @ train_energies)

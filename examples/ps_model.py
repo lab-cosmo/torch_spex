@@ -39,7 +39,7 @@ force_conversion = "KCAL_MOL_TO_MEV"
 target_key = "energy"
 dataset_path = "../datasets/rmd17/ethanol1.extxyz"
 do_forces = True
-force_weight = 10.0
+force_weight = 0.1
 n_test = 200
 n_train = 50
 r_cut = 6.0
@@ -70,8 +70,12 @@ train_structures, test_structures = get_dataset_slices(dataset_path, train_slice
 hypers = {
     "cutoff radius": r_cut,
     "radial basis": {
-        "r_cut": r_cut,
-        "E_max": 500
+        "mlp": True,
+        "type": "physical",
+        "scale": 2.0,
+        "E_max": 1200,
+        "normalize": True,
+        "cost_trade_off": False
     }
 }
 
@@ -213,7 +217,7 @@ else:
     optimizer = torch.optim.LBFGS(model.parameters(), lr=1e-2)
     batch_size = n_train
 
-
+    
 print("Precomputing neighborlists")
 
 transformers = [

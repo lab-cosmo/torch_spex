@@ -28,8 +28,11 @@ structures = next(iter(data_loader))
 hypers_spherical_expansion = {
     "cutoff radius": 6.0,
     "radial basis": {
-        "r_cut": 6.0,
-        "E_max": 200 
+        "type": "physical",
+        "E_max": 200,
+        "mlp": False,
+        "scale": 2.5,
+        "cost_trade_off": False
     }
 }
 
@@ -39,7 +42,7 @@ spherical_expansion_coefficients = calculator(**structures)
 block_C_0 = spherical_expansion_coefficients.block(a_i = 6, lam = 0)
 print("Block shape is", block_C_0.values.shape)
 
-block_C_0_0 = block_C_0.values[:, :, 2].flatten()
+block_C_0_0 = block_C_0.values[:, :, 2].flatten().detach().numpy()
 spherical_harmonics_0 = 1.0/np.sqrt(4.0*np.pi)
 
 all_species = np.unique(spherical_expansion_coefficients.keys["a_i"])

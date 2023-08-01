@@ -2,13 +2,11 @@ import copy
 
 import numpy as np
 import torch
-import ase
-from ase.neighborlist import primitive_neighbor_list
-import equistore
 from equistore import TensorMap, Labels, TensorBlock
 import sphericart.torch
 
 from .radial_basis import RadialBasis
+from .neighbor_list import get_neighbor_list
 from typing import Dict, List
 
 class SphericalExpansion(torch.nn.Module):
@@ -56,7 +54,9 @@ class SphericalExpansion(torch.nn.Module):
     >>> hypers = {
     ...     "cutoff radius": 3,
     ...     "radial basis": {
-    ...         "E_max": 20
+    ...         "type": "le",
+    ...         "E_max": 20.0,
+    ...         "mlp": False
     ...     },
     ...     "alchemical": 1,
     ... }
@@ -78,6 +78,11 @@ class SphericalExpansion(torch.nn.Module):
         super().__init__()
 
         self.hypers = hypers
+        self.normalize = True if "normalize" in hypers else False
+        if self.normalize:
+            avg_num_neighbors = hypers["normalize"]
+            self.normalization_factor = 1.0/np.sqrt(avg_num_neighbors)
+            self.normalization_factor_0 = 1.0/avg_num_neighbors**(3/4)
         self.all_species = np.array(all_species, dtype=np.int32)  # convert potential list to np.array
         self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species, device=device)
 
@@ -185,6 +190,12 @@ class SphericalExpansion(torch.nn.Module):
             for a_i in self.all_species:
                 where_ai = torch.where(species == a_i)[0]
                 densities_ai_l = torch.index_select(densities_l, 0, where_ai)
+                if self.normalize:
+                    if l == 0:
+                        # Very high correlations for l = 0: use a stronger normalization
+                        densities_ai_l *= self.normalization_factor_0
+                    else:
+                        densities_ai_l *= self.normalization_factor
                 labels.append([a_i, l, 1])
                 blocks.append(
                     TensorBlock(
@@ -250,9 +261,11 @@ class VectorExpansion(torch.nn.Module):
         super().__init__()
 
         self.hypers = hypers
-        # radial basis needs to know cutoff so we pass it
+        self.normalize = True if "normalize" in hypers else False
+        # radial basis needs to know cutoff so we pass it, as well as whether to normalize or not
         hypers_radial_basis = copy.deepcopy(hypers["radial basis"])
         hypers_radial_basis["r_cut"] = hypers["cutoff radius"]
+        hypers_radial_basis["normalize"] = self.normalize
         if "alchemical" in self.hypers:
             self.is_alchemical = True
             self.n_pseudo_species = self.hypers["alchemical"]
@@ -316,6 +329,7 @@ class VectorExpansion(torch.nn.Module):
         radial_basis = self.radial_basis_calculator(r, samples_metadata)
 
         spherical_harmonics = self.spherical_harmonics_calculator.compute(bare_cartesian_vectors)  # Get the spherical harmonics
+        if self.normalize: spherical_harmonics *= np.sqrt(4*np.pi)
         spherical_harmonics = torch.split(spherical_harmonics, self.spherical_harmonics_split_list, dim=1)  # Split them into l chunks
 
         # Use broadcasting semantics to get the products in equistore shape
