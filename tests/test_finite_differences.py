@@ -50,7 +50,7 @@ def test_autograd():
 
                 gradient = torch.autograd.grad(
                     outputs=energies,
-                    inputs=positions,
+                    inputs=spherical_expansion_kwargs["positions"],
                     grad_outputs=torch.ones_like(energies),
                     retain_graph=False,
                     create_graph=False,

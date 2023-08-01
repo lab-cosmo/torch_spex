@@ -163,8 +163,8 @@ class SphericalExpansion(torch.nn.Module):
             unique_species = -np.arange(self.n_pseudo_species)
         else:
             aj_metadata = samples_metadata["species_neighbor"]
-            aj_shifts = np.array([species_to_index[aj_index] for aj_index in aj_metadata])
-            density_indices = torch.LongTensor(s_i_metadata_to_unique*n_species+aj_shifts)
+            aj_shifts = torch.LongTensor([species_to_index[aj_index] for aj_index in aj_metadata])
+            density_indices = torch.LongTensor(s_i_metadata_to_unique.cpu()*n_species+aj_shifts)
 
             for l in range(l_max+1):
                 expanded_vectors_l = expanded_vectors.block(l=l).values
