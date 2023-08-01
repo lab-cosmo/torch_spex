@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import ase
 from torch_spex.spherical_expansions import SphericalExpansion
-from torch_spex.structures import Structures
+from torch_spex.structures import InMemoryDataset, TransformerNeighborList, TransformerProperty, collate_nl
 
 torch.set_default_dtype(torch.float64)
 
@@ -20,6 +20,10 @@ a = 6.0
 
 r = np.linspace(0.1, a-0.001, 1000)
 structures = get_dummy_structures(r)
+transformers = [TransformerNeighborList(cutoff=a)]
+dataset = InMemoryDataset(structures, transformers)
+data_loader = torch.utils.data.DataLoader(dataset, batch_size=1000, shuffle=False, collate_fn=collate_nl)
+structures = next(iter(data_loader))
 
 hypers_spherical_expansion = {
     "cutoff radius": 6.0,
@@ -30,7 +34,7 @@ hypers_spherical_expansion = {
 }
 
 calculator = SphericalExpansion(hypers_spherical_expansion, [1, 6])
-spherical_expansion_coefficients = calculator(Structures(structures))
+spherical_expansion_coefficients = calculator(**structures)
 
 block_C_0 = spherical_expansion_coefficients.block(a_i = 6, lam = 0)
 print("Block shape is", block_C_0.values.shape)

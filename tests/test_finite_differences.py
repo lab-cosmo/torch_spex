@@ -41,8 +41,8 @@ def test_autograd():
             self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
 
         def forward(self, spherical_expansion_kwargs, is_compute_forces=True):
-            positions = spherical_expansion_kwargs.pop("positions")
-            _ = spherical_expansion_kwargs.pop("cell")
+            for positions in spherical_expansion_kwargs["positions"]:
+                positions.requires_grad = True
             if is_compute_forces:
                 spherical_expansion = self.spherical_expansion_calculator(**spherical_expansion_kwargs)
                 tm = equistore.sum_over_samples(spherical_expansion, sample_names="center").components_to_properties(["m"]).keys_to_properties(["a_i", "lam", "sigma"])

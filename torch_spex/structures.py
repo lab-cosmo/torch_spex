@@ -19,9 +19,7 @@ def structure_to_torch(structure : AtomicStructure, device : torch.device = None
         species = torch.tensor(structure.numbers, device=device)
         cell = torch.tensor(structure.cell.array, device=device, dtype=torch.get_default_dtype())
         pbc = torch.tensor(structure.pbc, device=device)
-        energy = torch.tensor([structure.info["energy"]], device=device, dtype=torch.get_default_dtype())
-        forces = torch.tensor(structure.get_forces(), device=device, dtype=torch.get_default_dtype())
-        return positions, species, cell, pbc, energy, forces
+        return positions, species, cell, pbc
     else:
         raise ValueError("Unknown atom type. We only support ase.Atoms at the moment.")
 
@@ -77,7 +75,7 @@ class TransformerNeighborList(TransformerBase):
         self._device = device
 
     def __call__(self, structure: AtomicStructure) -> Dict[str, torch.Tensor]:
-        positions_i, species_i, cell_i, pbc_i, energy_i, forces_i = structure_to_torch(structure, device=self._device)
+        positions_i, species_i, cell_i, pbc_i = structure_to_torch(structure, device=self._device)
         centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i, pbc_i, self._cutoff)
 
         return {

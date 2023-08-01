@@ -221,7 +221,7 @@ model = Model(hypers, all_species, do_forces=do_forces).to(device)
 
 if optimizer_name == "Adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3) 
-    batch_size = 16  # Batch for training speed
+    batch_size = 8  # Batch for training speed
 else:
     optimizer = torch.optim.LBFGS(model.parameters(), line_search_fn="strong_wolfe", history_size=128)
     batch_size = 128  # Batch for memory
