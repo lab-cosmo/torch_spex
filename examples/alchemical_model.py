@@ -52,6 +52,7 @@ torch.manual_seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cpu"
 print(f"Training on {device}")
 
 conversions = get_conversions()
@@ -109,6 +110,8 @@ class Model(torch.nn.Module):
             ) for a_i in self.all_species
         })
         # """
+        self.comp_calculator = AtomicComposition(all_species)
+        self.composition_coefficients = None  # Needs to be set from outside
         self.do_forces = do_forces
 
     def forward(self, structure_batch, is_training=True):
@@ -127,6 +130,13 @@ class Model(torch.nn.Module):
 
         # print("Calculating energies")
         self._apply_layer(energies, ps, self.nu2_model)
+
+        comp = self.comp_calculator.compute(**structure_batch)
+        energies += comp @ self.composition_coefficients
+        if is_training:
+            print(batch["species"])
+            print(comp)
+            exit()
 
         # print("Computing forces by backpropagation")
         if self.do_forces:
@@ -162,9 +172,6 @@ class Model(torch.nn.Module):
                 optimizer.zero_grad()
                 predicted_energies, predicted_forces = model(batch)
 
-                comp = comp_calculator_torch.compute(**batch)
-                energies -= comp @ c_comp
-
                 loss = get_sse(predicted_energies, energies)
                 if do_forces:
                     forces = forces.to(device)
@@ -181,9 +188,6 @@ class Model(torch.nn.Module):
                     energies = batch.pop("energies")
                     forces = batch.pop("forces")
                     predicted_energies, predicted_forces = model(batch)
-                    
-                    comp = comp_calculator_torch.compute(**batch)
-                    energies -= comp @ c_comp
 
                     loss = get_sse(predicted_energies, energies)
                     if do_forces:
@@ -226,76 +230,64 @@ else:
     optimizer = torch.optim.LBFGS(model.parameters(), line_search_fn="strong_wolfe", history_size=128)
     batch_size = 128  # Batch for memory
 
+
 print("Precomputing neighborlists")
 
-transformers_train_data_loader = [TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device)]
-train_dataset = InMemoryDataset(train_structures, transformers_train_data_loader)
+transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device)]
+train_dataset = InMemoryDataset(train_structures, transformers)
+test_dataset = InMemoryDataset(test_structures, transformers)
+
 train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_nl)
-
-transformers_predict_train_data_loader = [TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device)]
-predict_train_dataset = InMemoryDataset(train_structures, transformers_predict_train_data_loader)
-predict_train_data_loader = torch.utils.data.DataLoader(predict_train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
-
-transformers_predict_test_data_loader = [TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device)]
-predict_test_dataset = InMemoryDataset(test_structures, transformers_predict_train_data_loader)
-predict_test_data_loader = torch.utils.data.DataLoader(predict_test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
+predict_train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
+predict_test_data_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
 
 print("Finished neighborlists")
 
-# with torch.autograd.set_detect_anomaly(True):
-predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
-predicted_test_energies, predicted_test_forces = model.predict_epoch(predict_test_data_loader)
+
+print("Linear fit for one-body energies")
+
 train_energies = torch.tensor([structure.info[target_key] for structure in train_structures])*energy_conversion_factor
 train_energies = train_energies.to(device)
 test_energies = torch.tensor([structure.info[target_key] for structure in test_structures])*energy_conversion_factor
 test_energies = test_energies.to(device)
-
-# Linear fit for one-body energies:
-comp_calculator_torch = AtomicComposition(all_species)
-import rascaline
-import equistore
-center_species_labels = equistore.Labels(
-    names = ["species_center"],
-    values = np.array(all_species).reshape(-1, 1)
-)
-comp_calculator = rascaline.AtomicComposition(per_structure=True)
-train_comp = comp_calculator.compute(train_structures)
-train_comp = train_comp.keys_to_properties(center_species_labels)
-train_comp = torch.tensor(train_comp.block().values).to(device)
-
-c_comp = torch.linalg.solve(train_comp.T @ train_comp, train_comp.T @ train_energies)
-
-test_comp = comp_calculator.compute(test_structures)
-test_comp = test_comp.keys_to_properties(center_species_labels)
-test_comp = torch.tensor(test_comp.block().values).to(device)
-
-train_energies -= train_comp @ c_comp
-test_energies -= test_comp @ c_comp
 
 if do_forces:
     train_forces = torch.tensor(np.concatenate([structure.get_forces() for structure in train_structures], axis=0))*force_conversion_factor
     train_forces = train_forces.to(device)
     test_forces = torch.tensor(np.concatenate([structure.get_forces() for structure in test_structures], axis=0))*force_conversion_factor
     test_forces = test_forces.to(device)
-print()
-print(f"Before training")
-print(f"Energy errors: Train RMSE: {get_rmse(predicted_train_energies, train_energies)}, Train MAE: {get_mae(predicted_train_energies, train_energies)}, Test RMSE: {get_rmse(predicted_test_energies, test_energies)}, Test MAE: {get_mae(predicted_test_energies, test_energies)}")
-if do_forces:
-    print(f"Force errors: Train RMSE: {get_rmse(predicted_train_forces, train_forces)}, Train MAE: {get_mae(predicted_train_forces, train_forces)}, Test RMSE: {get_rmse(predicted_test_forces, test_forces)}, Test MAE: {get_mae(predicted_test_forces, test_forces)}")
 
-"""import cProfile
-cProfile.runctx('model.train_epoch(data_loader, force_weight)', globals(), locals(), 'profile')
+comp_calculator_torch = AtomicComposition(all_species)
+
+train_comp = []
+for batch in predict_train_data_loader:
+    batch.pop("energies")
+    batch.pop("forces")
+    train_comp.append(
+        comp_calculator_torch.compute(**batch)
+    )
+train_comp = torch.concatenate(train_comp)
+c_comp = torch.linalg.solve(train_comp.T @ train_comp, train_comp.T @ train_energies)
+model.composition_coefficients = c_comp
+
+print("Finished linear fit for one-body energies")
+
+
+"""
+# cProfile run:
+import cProfile
+cProfile.runctx('model.train_epoch(train_data_loader, force_weight)', globals(), locals(), 'profile')
 
 import pstats
 stats = pstats.Stats('profile')
 stats.strip_dirs().sort_stats('tottime').print_stats(100)
 
 import os
-os.remove('profile')"""
+os.remove('profile')
+"""
+
 
 for epoch in range(1000):
-    
-    _ = model.train_epoch(train_data_loader, force_weight)
 
     predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
     predicted_test_energies, predicted_test_forces = model.predict_epoch(predict_test_data_loader)
@@ -305,3 +297,5 @@ for epoch in range(1000):
     print(f"Energy errors: Train RMSE: {get_rmse(predicted_train_energies, train_energies)}, Train MAE: {get_mae(predicted_train_energies, train_energies)}, Test RMSE: {get_rmse(predicted_test_energies, test_energies)}, Test MAE: {get_mae(predicted_test_energies, test_energies)}")
     if do_forces:
         print(f"Force errors: Train RMSE: {get_rmse(predicted_train_forces, train_forces)}, Train MAE: {get_mae(predicted_train_forces, train_forces)}, Test RMSE: {get_rmse(predicted_test_forces, test_forces)}, Test MAE: {get_mae(predicted_test_forces, test_forces)}")
+
+    _ = model.train_epoch(train_data_loader, force_weight)
