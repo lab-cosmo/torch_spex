@@ -15,9 +15,9 @@ def structure_to_torch(structure : AtomicStructure, device : torch.device = None
     """
     if isinstance(structure, ase.Atoms):
         # dtype is automatically referred from the type in the structure object
-        positions = torch.tensor(structure.positions, device=device)
+        positions = torch.tensor(structure.positions, device=device, dtype=torch.get_default_dtype())
         species = torch.tensor(structure.numbers, device=device)
-        cell = torch.tensor(structure.cell.array, device=device)
+        cell = torch.tensor(structure.cell.array, device=device, dtype=torch.get_default_dtype())
         pbc = torch.tensor(structure.pbc, device=device)
         return positions, species, cell, pbc
     else:
@@ -70,39 +70,22 @@ class TransformerNeighborList(TransformerBase):
     """
     Produces a neighbour list and with direction vectors from an AtomicStructure
     """
-    def __init__(self, cutoff: float, positions_requires_grad=True, cell_requires_grad=True, device=None):
+    def __init__(self, cutoff: float, device=None):
         self._cutoff = cutoff
-        self._positions_requires_grad = positions_requires_grad
-        self._cell_requires_grad = cell_requires_grad
-        self._structure_index = 0
         self._device = device
-
-    def reset_structure_index(self):
-        self._structure_index = 0
 
     def __call__(self, structure: AtomicStructure) -> Dict[str, torch.Tensor]:
         positions_i, species_i, cell_i, pbc_i = structure_to_torch(structure, device=self._device)
-        centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i, pbc_i,  self._cutoff)
+        centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i, pbc_i, self._cutoff)
 
-        positions_i.requires_grad = self._positions_requires_grad
-        cell_i.requires_grad = self._cell_requires_grad
-
-        # cell_shifts_ij needs to be changed to float type to do operations 
-        direction_vectors_ij = positions_i[pairs_ij[:, 1]] - positions_i[pairs_ij[:, 0]] + (cell_shifts_ij.to(dtype=cell_i.dtype) @ cell_i)
-
-        structure_index = self._structure_index
-        self._structure_index += 1
-        return {'structure_centers': torch.tensor([structure_index] * len(centers_i)),
-                'structure_pairs': torch.tensor([structure_index] * len(pairs_ij)),
-                'positions': positions_i,
-                'species': species_i,
-                'cell': cell_i.unsqueeze(dim=0),
-                'centers': centers_i,
-                'pairs': pairs_ij,
-                'cell_shifts': cell_shifts_ij,
-                'direction_vectors': direction_vectors_ij}
-
-
+        return {
+            'positions': positions_i,
+            'species': species_i,
+            'cell': cell_i,
+            'centers': centers_i,
+            'pairs': pairs_ij,
+            'cell_shifts': cell_shifts_ij
+        }
 
 # Temporary Dataset until we have an equistore Dataset
 class InMemoryDataset(torch.utils.data.Dataset):
@@ -125,22 +108,19 @@ class InMemoryDataset(torch.utils.data.Dataset):
         return self.n_structures
 
 def collate_nl(data_list):
-    # positions may not be stacked because we need them as leaf nodes to get gradients
-    # because concatenating or slicing creates a new node in the autograd graph
-    #
-    # Autograd grad when concatenating or slicing together the positions for batches
-    # positions --DataLoader--> batched_positions
-    #    |
-    #    |Dataset
-    #    |
-    #    --> direction_vectors --DataLoader--> batched_direction_vectors
-    #
-    # Putting the positions into a list does not create a new node
 
     collated = {key: torch.concatenate([data[key] for data in data_list], dim=0) for key in filter(lambda x : x not in ["positions", "cell"], data_list[0].keys())}
     collated['positions'] = [data["positions"] for data in data_list]
-    collated['cell'] = [data["cell"] for data in data_list]
-    min_structure_idx = collated['structure_centers'][0].clone()
-    collated['structure_centers'] -= min_structure_idx # minimum structure index should be first one
-    collated['structure_pairs'] -= min_structure_idx # minimum structure index should be first one
+    collated['cells'] = [data["cell"] for data in data_list]
+    collated['structure_centers'] = torch.concatenate(
+        [torch.tensor([structure_index] * len(data_list[structure_index]["centers"]), device=collated["positions"][0].device) for structure_index in range(len(data_list))]
+    )
+    collated['structure_pairs'] = torch.concatenate(
+        [torch.tensor([structure_index] * len(data_list[structure_index]["pairs"]), device=collated["positions"][0].device) for structure_index in range(len(data_list))]
+    )
+    collated['structure_offsets'] = torch.tensor(
+        np.cumsum([0] + [structure_positions.shape[0] for structure_positions in collated["positions"][:-1]]),
+        device=collated["positions"][0].device,
+        dtype=torch.long
+    )
     return collated

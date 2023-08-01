@@ -28,8 +28,6 @@ class TestEthanol1SphericalExpansion:
     dataset = InMemoryDataset(frames, transformers)
     loader = DataLoader(dataset, batch_size=1, collate_fn=collate_nl)
     batch = next(iter(loader))
-    batch.pop("positions")
-    batch.pop("cell")
 
     def test_vector_expansion_coeffs(self):
         tm_ref = equistore.core.io.load_custom_array("tests/data/vector_expansion_coeffs-ethanol1_0-data.npz", equistore.core.io.create_torch_array)
@@ -90,8 +88,6 @@ class TestArtificialSphericalExpansion:
     dataset = InMemoryDataset(frames, transformers)
     loader = DataLoader(dataset, batch_size=len(frames), collate_fn=collate_nl)
     batch = next(iter(loader))
-    batch.pop("positions")
-    batch.pop("cell")
 
     def test_vector_expansion_coeffs(self):
         tm_ref = equistore.core.io.load_custom_array("tests/data/vector_expansion_coeffs-artificial-data.npz", equistore.core.io.create_torch_array)

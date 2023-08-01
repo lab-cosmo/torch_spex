@@ -27,7 +27,7 @@ def test_autograd():
     }
     all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
 
-    transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"], positions_requires_grad=True, cell_requires_grad=False)]
+    transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"])]
     dataset = InMemoryDataset(frames, transformers)
     #collate_fn = functools.partial(collate_nl, position_requires_grad=True, cell_requires_grad=False)
     loader = DataLoader(dataset, batch_size=len(frames), collate_fn=collate_nl)
@@ -41,8 +41,8 @@ def test_autograd():
             self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
 
         def forward(self, spherical_expansion_kwargs, is_compute_forces=True):
-            positions = spherical_expansion_kwargs.pop("positions")
-            _ = spherical_expansion_kwargs.pop("cell")
+            for positions in spherical_expansion_kwargs["positions"]:
+                positions.requires_grad = True
             if is_compute_forces:
                 spherical_expansion = self.spherical_expansion_calculator(**spherical_expansion_kwargs)
                 tm = equistore.sum_over_samples(spherical_expansion, sample_names="center").components_to_properties(["m"]).keys_to_properties(["a_i", "lam", "sigma"])
@@ -50,7 +50,7 @@ def test_autograd():
 
                 gradient = torch.autograd.grad(
                     outputs=energies,
-                    inputs=positions,
+                    inputs=spherical_expansion_kwargs["positions"],
                     grad_outputs=torch.ones_like(energies),
                     retain_graph=False,
                     create_graph=False,
