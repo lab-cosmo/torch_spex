@@ -8,7 +8,7 @@ rascaline._c_lib._get_library()
 from torch_spex.le import Jn_zeros
 from equistore import Labels
 from torch_spex.spherical_expansions import SphericalExpansion
-from torch_spex.structures import ase_atoms_to_tensordict
+from torch_spex.structures import InMemoryDataset, TransformerNeighborList, TransformerProperty, collate_nl
 
 
 ##############################
@@ -22,6 +22,16 @@ a = 6.0
 E_max = 200
 
 structures = ase.io.read("../datasets/rmd17/ethanol1.extxyz", ":10")
+transformers = [
+    TransformerNeighborList(cutoff=a),
+    TransformerProperty("energies", lambda frame: torch.tensor([frame.info["energy"]], dtype=torch.get_default_dtype())),
+    TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype()))
+]
+dataset = InMemoryDataset(structures, transformers)
+data_loader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=False, collate_fn=collate_nl)
+torch_structures = next(iter(data_loader))
+torch_structures.pop("energies")
+torch_structures.pop("forces")
 
 hypers_torch_spex = {
     "cutoff radius": a,
@@ -32,7 +42,8 @@ hypers_torch_spex = {
     }
 }
 calculator = SphericalExpansion(hypers_torch_spex, [1, 6, 8])
-spherical_expansion_coefficients_torch_spex = calculator(ase_atoms_to_tensordict(structures))
+spherical_expansion_coefficients_torch_spex = calculator(**torch_structures)
+
 all_species = np.unique(spherical_expansion_coefficients_torch_spex.keys["a_i"])
 
 l_max = 0

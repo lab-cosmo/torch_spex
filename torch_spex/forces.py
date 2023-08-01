@@ -1,16 +1,17 @@
 import torch
+from typing import List
 
 def compute_forces(
-    energy: torch.Tensor, positions: torch.Tensor, is_training=True
-) -> torch.Tensor:
+    energy: torch.Tensor, positions: List[torch.Tensor], is_training=True
+) -> List[torch.Tensor]:
     gradient = torch.autograd.grad(
         outputs=energy,
         inputs=positions,
         grad_outputs=torch.ones_like(energy),
         retain_graph=is_training,
         create_graph=is_training,
-    )[0]
-    return -1 * gradient
+    )
+    return [-single_structure_gradient for single_structure_gradient in gradient]
 
 
 if __name__ == "__main__":
