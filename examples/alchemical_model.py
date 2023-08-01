@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from dataset import get_dataset_slices
 from torch_spex.forces import compute_forces
-from torch_spex.structures import InMemoryDataset, TransformerNeighborList, collate_nl
+from torch_spex.structures import InMemoryDataset, TransformerNeighborList, TransformerProperty, collate_nl
 from torch_spex.spherical_expansions import SphericalExpansion
 from torch_spex.atomic_composition import AtomicComposition
 from power_spectrum import PowerSpectrum
@@ -41,7 +41,7 @@ force_conversion = "NO_CONVERSION"
 target_key = "energy"
 dataset_path = "../datasets/alchemical.xyz"
 do_forces = True
-force_weight = 1.0
+force_weight = 10.0
 n_test = 200
 n_train = 200
 r_cut = 5.0
@@ -133,10 +133,6 @@ class Model(torch.nn.Module):
 
         comp = self.comp_calculator.compute(**structure_batch)
         energies += comp @ self.composition_coefficients
-        if is_training:
-            print(batch["species"])
-            print(comp)
-            exit()
 
         # print("Computing forces by backpropagation")
         if self.do_forces:
@@ -233,7 +229,11 @@ else:
 
 print("Precomputing neighborlists")
 
-transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device)]
+transformers = [
+    TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device),
+    TransformerProperty("energies", lambda frame: torch.tensor([frame.info["energy"]], dtype=torch.get_default_dtype(), device=device)),
+    TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device))
+]
 train_dataset = InMemoryDataset(train_structures, transformers)
 test_dataset = InMemoryDataset(test_structures, transformers)
 

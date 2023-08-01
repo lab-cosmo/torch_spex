@@ -78,7 +78,7 @@ class TransformerNeighborList(TransformerBase):
 
     def __call__(self, structure: AtomicStructure) -> Dict[str, torch.Tensor]:
         positions_i, species_i, cell_i, pbc_i, energy_i, forces_i = structure_to_torch(structure, device=self._device)
-        centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i, pbc_i,  self._cutoff)
+        centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i, pbc_i, self._cutoff)
 
         return {
             'positions': positions_i,
@@ -86,9 +86,7 @@ class TransformerNeighborList(TransformerBase):
             'cell': cell_i,
             'centers': centers_i,
             'pairs': pairs_ij,
-            'cell_shifts': cell_shifts_ij,
-            'energies': energy_i,  # change name to plural: this will be automatically collated
-            'forces': forces_i
+            'cell_shifts': cell_shifts_ij
         }
 
 # Temporary Dataset until we have an equistore Dataset
@@ -113,7 +111,7 @@ class InMemoryDataset(torch.utils.data.Dataset):
 
 def collate_nl(data_list):
 
-    collated = {key: torch.concatenate([data[key] for data in data_list], dim=0) for key in filter(lambda x : x not in ["positions", "cell", "energy"], data_list[0].keys())}
+    collated = {key: torch.concatenate([data[key] for data in data_list], dim=0) for key in filter(lambda x : x not in ["positions", "cell"], data_list[0].keys())}
     collated['positions'] = [data["positions"] for data in data_list]
     collated['cells'] = [data["cell"] for data in data_list]
     collated['structure_centers'] = torch.concatenate(
