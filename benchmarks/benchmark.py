@@ -9,9 +9,10 @@ rascaline._c_lib._get_library()
 from torch_spex.le import Jn_zeros
 from equistore import Labels
 from torch_spex.spherical_expansions import SphericalExpansion
-from torch_spex.structures import ase_atoms_to_tensordict
+from torch_spex.structures import InMemoryDataset, TransformerNeighborList, TransformerProperty, collate_nl
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+# device = "cpu"
 print(f"Running on {device}")
 
 torch.set_default_dtype(torch.float64)
@@ -19,25 +20,33 @@ torch.set_default_dtype(torch.float64)
 a = 6.0
 E_max = 200
 
-structures = ase.io.read("../datasets/rmd17/ethanol1.extxyz", ":20")
+structures = ase.io.read("../datasets/alchemical.xyz", ":20")
 
 hypers_spherical_expansion = {
     "cutoff radius": 6.0,
     "radial basis": {
+        "type": "le",
+        "mlp": False,
         "r_cut": 6.0,
         "E_max": 200 
     }
 }
-calculator = SphericalExpansion(hypers_spherical_expansion, [1, 6, 8], device=device)
-transformed_structures = ase_atoms_to_tensordict(structures, device=device)
-transformed_structures
+all_species = np.sort(np.unique(np.concatenate([structure.numbers for structure in structures])))
+calculator = SphericalExpansion(hypers_spherical_expansion, all_species, device=device)
+
+transformers = [
+    TransformerNeighborList(cutoff=hypers_spherical_expansion["cutoff radius"], device=device),
+]
+dataset = InMemoryDataset(structures, transformers)  # avoid sharing tensors between different dataloaders
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=20, shuffle=False, collate_fn=collate_nl)
+transformed_structures = next(iter(dataloader))
 
 from torch.profiler import profile
 
 start_time = time.time()
-if True: #with profile() as prof:
+if True:  # with profile() as prof:
     for _ in range(100):
-        spherical_expansion_coefficients_torch_spex = calculator(transformed_structures)
+        spherical_expansion_coefficients_torch_spex = calculator(**transformed_structures)
 finish_time = time.time()
 print(f"torch_spex took {finish_time-start_time} s")
 

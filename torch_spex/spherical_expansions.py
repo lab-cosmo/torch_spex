@@ -136,7 +136,7 @@ class SphericalExpansion(torch.nn.Module):
 
         samples_metadata = expanded_vectors.block(l=0).samples
 
-        s_metadata = structure_centers.cpu()  # Copy to suppress torch warning about non-writeability
+        s_metadata = structure_centers.cpu()
         i_metadata = centers.cpu()
 
         n_species = len(self.all_species)
@@ -336,10 +336,10 @@ class VectorExpansion(torch.nn.Module):
         vector_expansion_blocks = []
         for l, (radial_basis_l, spherical_harmonics_l) in enumerate(zip(radial_basis, spherical_harmonics)):
             if self.is_alchemical:  # If the model is alchemical, the radial basis has one extra dimension (alpha_j)
-                vector_expansion_l = radial_basis_l[:, None, :, :] * spherical_harmonics_l[:, :, None, None]
+                vector_expansion_l = radial_basis_l.unsqueeze(1) * spherical_harmonics_l.unsqueeze(2).unsqueeze(3)
                 n_max_l = vector_expansion_l.shape[3]
             else:
-                vector_expansion_l = radial_basis_l[:, None, :] * spherical_harmonics_l[:, :, None]
+                vector_expansion_l = radial_basis_l.unsqueeze(1) * spherical_harmonics_l.unsqueeze(2)
                 n_max_l = vector_expansion_l.shape[2]
             if self.is_alchemical:
                 properties = Labels(
@@ -409,7 +409,7 @@ def get_cartesian_vectors(positions, cells, species, cell_shifts, centers, pairs
         values = direction_vectors.unsqueeze(dim=-1),
         samples = Labels(
             names = ["structure", "center", "neighbor", "species_center", "species_neighbor", "cell_x", "cell_y", "cell_z"],
-            values = np.array(labels, dtype=np.int32)
+            values = labels
         ),
         components = [
             Labels(

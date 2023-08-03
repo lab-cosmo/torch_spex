@@ -39,8 +39,8 @@ force_conversion = "KCAL_MOL_TO_MEV"
 target_key = "energy"
 dataset_path = "../datasets/rmd17/ethanol1.extxyz"
 do_forces = True
-force_weight = 0.1
-n_test = 200
+force_weight = 1.0
+n_test = 1000
 n_train = 50
 r_cut = 6.0
 optimizer_name = "Adam"
@@ -72,8 +72,8 @@ hypers = {
     "radial basis": {
         "mlp": True,
         "type": "physical",
-        "scale": 2.0,
-        "E_max": 1200,
+        "scale": 1.7,
+        "E_max": 3000,
         "normalize": True,
         "cost_trade_off": False
     }
@@ -230,8 +230,8 @@ predict_train_dataset = InMemoryDataset(train_structures, transformers)
 predict_test_dataset = InMemoryDataset(test_structures, transformers)
 train_dataset = InMemoryDataset(train_structures, transformers)  # avoid sharing tensors between different dataloaders
 
-predict_train_data_loader = torch.utils.data.DataLoader(predict_train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
-predict_test_data_loader = torch.utils.data.DataLoader(predict_test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
+predict_train_data_loader = torch.utils.data.DataLoader(predict_train_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_nl)
+predict_test_data_loader = torch.utils.data.DataLoader(predict_test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_nl)
 train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_nl)
 
 print("Finished neighborlists")

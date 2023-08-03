@@ -56,6 +56,7 @@ torch.manual_seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+# device = "cpu"
 print(f"Training on {device}")
 
 conversions = get_conversions()
@@ -260,8 +261,8 @@ predict_train_dataset = InMemoryDataset(train_structures, transformers)
 predict_test_dataset = InMemoryDataset(test_structures, transformers)
 train_dataset = InMemoryDataset(train_structures, transformers)  # avoid sharing tensors between different dataloaders
 
-predict_train_data_loader = torch.utils.data.DataLoader(predict_train_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
-predict_test_data_loader = torch.utils.data.DataLoader(predict_test_dataset, batch_size=32, shuffle=False, collate_fn=collate_nl)
+predict_train_data_loader = torch.utils.data.DataLoader(predict_train_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_nl)
+predict_test_data_loader = torch.utils.data.DataLoader(predict_test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_nl)
 train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_nl)
 
 print("Finished neighborlists")
@@ -307,9 +308,20 @@ stats.strip_dirs().sort_stats('tottime').print_stats(100)
 import os
 os.remove('profile')
 """
+"""
+from torch.profiler import profile
 
+with profile(
+    activities=[
+        torch.profiler.ProfilerActivity.CPU,
+        torch.profiler.ProfilerActivity.CUDA,
+    ]
+) as prof:
+"""
 
 for epoch in range(1000):
+
+    # print(torch.cuda.max_memory_allocated())
 
     predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
     predicted_test_energies, predicted_test_forces = model.predict_epoch(predict_test_data_loader)
@@ -321,3 +333,5 @@ for epoch in range(1000):
         print(f"Force errors: Train RMSE: {get_rmse(predicted_train_forces, train_forces)}, Train MAE: {get_mae(predicted_train_forces, train_forces)}, Test RMSE: {get_rmse(predicted_test_forces, test_forces)}, Test MAE: {get_mae(predicted_test_forces, test_forces)}")
 
     _ = model.train_epoch(train_data_loader, force_weight)
+
+#print(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=20))

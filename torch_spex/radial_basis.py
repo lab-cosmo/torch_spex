@@ -22,6 +22,7 @@ class RadialBasis(torch.nn.Module):
             self.n_max_l, self.spliner = get_physical_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["scale"], hypers["normalize"], hypers["cost_trade_off"], device=device)
         else:
             raise ValueError("unsupported radial basis")
+        self.n_max_l = list(self.n_max_l)
         self.l_max = len(self.n_max_l) - 1
         self.radial_transform = (lambda x: x)
         if "alchemical" in hypers:
@@ -50,6 +51,7 @@ class RadialBasis(torch.nn.Module):
                     normalize("linear_no_bias", torch.nn.Linear(32, self.n_max_l[l], bias=False))
                 ) for aj in self.all_species_names for l in range(self.l_max+1)
             })
+        self.split_dimension = 2 if self.is_alchemical else 1
 
     def forward(self, r, samples_metadata):
 
@@ -63,29 +65,31 @@ class RadialBasis(torch.nn.Module):
                 device = radial_functions.device
             )
             pseudo_species_weights = self.combination_matrix(one_hot_aj)
+            radial_functions = radial_functions.unsqueeze(1)*pseudo_species_weights.unsqueeze(2)
+            # Note: if the model is alchemical, now the radial basis has one extra dimension: the alpha_j dimension, which is in the middle
 
-        radial_basis = []
-        index = 0
-        for l in range(self.l_max+1):
-            radial_basis_l = radial_functions[:, index:index+self.n_max_l[l]]
-            if self.is_alchemical:
-                radial_basis_l = radial_basis_l[:, None, :] * pseudo_species_weights[:, :, None]
-                # Note: if the model is alchemical, now the radial basis has one extra dimension: the alpha_j dimension, which is in the middle
-            radial_basis.append(radial_basis_l)
-            index += self.n_max_l[l]
+        radial_basis = torch.split(radial_functions, self.n_max_l, dim=self.split_dimension)
 
         if self.apply_mlp:
+            radial_basis_mlp = []
             if self.is_alchemical:
                 for l in range(self.l_max+1):
+                    radial_basis_mlp_l = []
                     for aj in self.all_species_names:
-                        radial_basis[l][:, aj, :] = self.radial_mlps[str(l)+"_"+str(aj)](radial_basis[l][:, aj, :].clone())
+                        radial_basis_mlp_l_aj = self.radial_mlps[str(l)+"_"+str(aj)](radial_basis[l][:, aj, :])
+                        radial_basis_mlp_l.append(radial_basis_mlp_l_aj)
+                    radial_basis_mlp_l = torch.stack(radial_basis_mlp_l, dim=1)
+                    radial_basis_mlp.append(radial_basis_mlp_l)
             else:
                 for l in range(self.l_max+1):
                     neighbor_species = samples_metadata["species_neighbor"]
+                    radial_basis_mlp_l = torch.zeros_like(radial_basis[l])
                     for aj in self.all_species_names:
                         where_aj = torch.tensor(np.nonzero(neighbor_species == aj)[0], dtype=torch.int64, device=radial_functions.device)
-                        radial_basis[l][where_aj, :] = self.radial_mlps[str(l)+"_"+str(aj)](radial_basis[l][where_aj, :].clone())
-
-        return radial_basis
+                        radial_basis_mlp_l[where_aj, :] = self.radial_mlps[str(l)+"_"+str(aj)](torch.index_select(radial_basis[l], 0, where_aj))
+                    radial_basis_mlp.append(radial_basis_mlp_l)
+            return radial_basis_mlp
+        else:
+            return radial_basis
 
 
