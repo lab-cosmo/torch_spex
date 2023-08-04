@@ -7,7 +7,6 @@ from torch_spex.spherical_expansions import SphericalExpansion
 from torch_spex.atomic_composition import AtomicComposition
 from power_spectrum import PowerSpectrum
 from torch_spex.normalize import get_average_number_of_neighbors, normalize_true, normalize_false
-import equistore
 
 # Conversions
 
@@ -81,7 +80,7 @@ hypers = {
     "cutoff radius": r_cut,
     "radial basis": {
         "mlp": True,
-        "type": "physical",
+        "type": "le",
         "scale": 3.0,
         "E_max": 500,
         "normalize": True,
@@ -99,6 +98,7 @@ average_number_of_atoms = sum([structure.get_atomic_numbers().shape[0] for struc
 print("Average number of atoms per structure:", average_number_of_atoms)
 
 all_species = np.sort(np.unique(np.concatenate([train_structure.numbers for train_structure in train_structures] + [test_structure.numbers for test_structure in test_structures])))
+all_species = [int(species) for species in all_species]  # convert to Python ints for tracer
 print(f"All species: {all_species}")
 
 
@@ -143,15 +143,34 @@ class Model(torch.nn.Module):
                 structure_positions.requires_grad = True
 
         # print("Calculating spherical expansion")
-        spherical_expansion = self.spherical_expansion_calculator(**structure_batch)
+        spherical_expansion = self.spherical_expansion_calculator(
+            positions = structure_batch["positions"],
+            cells = structure_batch["cells"],
+            species = structure_batch["species"],
+            cell_shifts = structure_batch["cell_shifts"],
+            centers = structure_batch["centers"],
+            pairs = structure_batch["pairs"],
+            structure_centers = structure_batch["structure_centers"],
+            structure_pairs = structure_batch["structure_pairs"],
+            structure_offsets = structure_batch["structure_offsets"]
+        )
         ps = self.ps_calculator(spherical_expansion)
-        if normalize: ps = equistore.divide(ps, 10.0) # BUG ????????????????????????//dafsdjf;asdkjfhladsjhbf
 
         # print("Calculating energies")
         self._apply_layer(energies, ps, self.nu2_model)
         if normalize: energies = energies / np.sqrt(average_number_of_atoms)
 
-        comp = self.comp_calculator.compute(**structure_batch)
+        comp = self.comp_calculator.compute(
+            positions = structure_batch["positions"],
+            cells = structure_batch["cells"],
+            species = structure_batch["species"],
+            cell_shifts = structure_batch["cell_shifts"],
+            centers = structure_batch["centers"],
+            pairs = structure_batch["pairs"],
+            structure_centers = structure_batch["structure_centers"],
+            structure_pairs = structure_batch["structure_pairs"],
+            structure_offsets = structure_batch["structure_offsets"]
+        )
         energies += comp @ self.composition_coefficients
 
         # print("Computing forces by backpropagation")
@@ -222,7 +241,7 @@ class Model(torch.nn.Module):
         atomic_energies = []
         structure_indices = []
         for a_i in self.all_species:
-            block = tmap.block(a_i=a_i)
+            block = tmap.block({"a_i": a_i})
             # print(block.values)
             features = block.values.squeeze(dim=1)
             structure_indices.append(block.samples["structure"])
@@ -230,15 +249,16 @@ class Model(torch.nn.Module):
                 layer[str(a_i)](features).squeeze(dim=-1)
             )
         atomic_energies = torch.concat(atomic_energies)
-        structure_indices = torch.LongTensor(np.concatenate(structure_indices))
+        structure_indices = torch.concatenate(structure_indices)
         # print("Before aggregation", torch.mean(atomic_energies), get_2_mom(atomic_energies))
         
-        energies.index_add_(dim=0, index=structure_indices.to(device), source=atomic_energies)
+        energies.index_add_(dim=0, index=structure_indices, source=atomic_energies)
         # THIS IN-PLACE MODIFICATION HAS TO CHANGE!
 
     # def print_state()... Would print loss, train errors, validation errors, test errors, ...
 
 model = Model(hypers, all_species, do_forces=do_forces).to(device)
+model = torch.jit.script(model)
 # print(model)
 
 if optimizer_name == "Adam":
@@ -319,7 +339,7 @@ with profile(
 ) as prof:
 """
 
-for epoch in range(1000):
+for epoch in range(3):
 
     # print(torch.cuda.max_memory_allocated())
 

@@ -44,7 +44,7 @@ def build_neighborlist(positions: torch.Tensor, cell: torch.Tensor, pbc: torch.T
     cell_shifts = torch.tensor(cell_shifts, device=device)
 
     pairs = torch.vstack([pairs_i, pairs_j]).T
-    centers = torch.arange(len(positions))
+    centers = torch.arange(len(positions), device=device)
     return centers, pairs, cell_shifts
 
 

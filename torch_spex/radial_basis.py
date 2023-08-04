@@ -24,7 +24,6 @@ class RadialBasis(torch.nn.Module):
             raise ValueError("unsupported radial basis")
         self.n_max_l = list(self.n_max_l)
         self.l_max = len(self.n_max_l) - 1
-        self.radial_transform = (lambda x: x)
         if "alchemical" in hypers:
             self.is_alchemical = True
             self.n_pseudo_species = hypers["alchemical"]
@@ -52,6 +51,9 @@ class RadialBasis(torch.nn.Module):
                 ) for aj in self.all_species_names for l in range(self.l_max+1)
             })
         self.split_dimension = 2 if self.is_alchemical else 1
+
+    def radial_transform(self, r):
+        return r
 
     def forward(self, r, samples_metadata):
 
