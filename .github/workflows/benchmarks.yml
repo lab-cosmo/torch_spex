@@ -29,4 +29,6 @@ jobs:
     #  uses: lhotari/action-upterm@v1
 
     - name: run asv benchmarks
-      run: tox -e benchmarks-ci
+      # --strict return nonzero exit if benchmark fail
+      # --quick run the benchmarks only once (no round, one sample, 1 number)
+      run: tox -e benchmarks-commit -- --quick --parallel --strict 'HEAD^!'
