@@ -1,9 +1,10 @@
 import numpy as np
 import torch
-import equistore
+import equistore.torch as equistore
 from .le import get_le_spliner
 from .physical_le import get_physical_le_spliner
 from .normalize import normalize_true, normalize_false
+from .temporary_one_hot import one_hot
 
 
 class RadialBasis(torch.nn.Module):
@@ -62,7 +63,7 @@ class RadialBasis(torch.nn.Module):
 
         if self.is_alchemical:
             one_hot_aj = torch.tensor(
-                equistore.one_hot(samples_metadata, self.all_species_labels),
+                one_hot(samples_metadata, self.all_species_labels),
                 dtype = torch.get_default_dtype(),
                 device = radial_functions.device
             )

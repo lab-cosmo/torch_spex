@@ -84,7 +84,7 @@ class SphericalExpansion(torch.nn.Module):
             avg_num_neighbors = hypers["normalize"]
             self.normalization_factor = 1.0/np.sqrt(avg_num_neighbors)
             self.normalization_factor_0 = 1.0/avg_num_neighbors**(3/4)
-        self.all_species = np.array(all_species, dtype=np.int32)  # convert potential list to np.array
+        self.all_species = torch.tensor(all_species, dtype=torch.long)  # convert potential list to torch.Tensor
         self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species, device=device)
 
         if "alchemical" in self.hypers:
