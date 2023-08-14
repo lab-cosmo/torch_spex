@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import equistore.torch as equistore
+from equistore.torch import Labels
 from .le import get_le_spliner
 from .physical_le import get_physical_le_spliner
 from .normalize import normalize_true, normalize_false
@@ -29,7 +29,7 @@ class RadialBasis(torch.nn.Module):
             self.is_alchemical = True
             self.n_pseudo_species = hypers["alchemical"]
             self.combination_matrix = normalize("embedding", torch.nn.Linear(all_species.shape[0], self.n_pseudo_species, bias=False))
-            self.all_species_labels = equistore.Labels(
+            self.all_species_labels = Labels(
                 names = ["species_neighbor"],
                 values = all_species[:, None]
             )
@@ -39,7 +39,7 @@ class RadialBasis(torch.nn.Module):
         self.apply_mlp = False
         if hypers["mlp"]:
             self.apply_mlp = True
-            self.all_species_names = range(self.n_pseudo_species) if "alchemical" in hypers else all_species
+            self.all_species_names = list(range(self.n_pseudo_species)) if "alchemical" in hypers else all_species
             self.radial_mlps = torch.nn.ModuleDict({
                 str(l)+"_"+str(aj) : torch.nn.Sequential(
                     normalize("linear_no_bias", torch.nn.Linear(self.n_max_l[l], 32, bias=False)),
@@ -56,17 +56,13 @@ class RadialBasis(torch.nn.Module):
     def radial_transform(self, r):
         return r
 
-    def forward(self, r, samples_metadata):
+    def forward(self, r, samples_metadata: Labels):
 
         x = self.radial_transform(r)
         radial_functions = self.spliner.compute(x)
 
         if self.is_alchemical:
-            one_hot_aj = torch.tensor(
-                one_hot(samples_metadata, self.all_species_labels),
-                dtype = torch.get_default_dtype(),
-                device = radial_functions.device
-            )
+            one_hot_aj = one_hot(samples_metadata, self.all_species_labels)
             pseudo_species_weights = self.combination_matrix(one_hot_aj)
             radial_functions = radial_functions.unsqueeze(1)*pseudo_species_weights.unsqueeze(2)
             # Note: if the model is alchemical, now the radial basis has one extra dimension: the alpha_j dimension, which is in the middle
