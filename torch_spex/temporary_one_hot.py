@@ -12,14 +12,14 @@ def one_hot(labels: Labels, dimension: Labels) -> torch.Tensor:
         )
 
     name = dimension.names[0]
-    possible_labels = dimension[name]
+    possible_labels = dimension.column(name)
 
-    original_labels = labels[name]  # assuming the name is in the labels
+    original_labels = labels.column(name)  # assuming the name is in the labels
 
     indices = torch.where(
-        original_labels.reshape(original_labels.size, 1) == possible_labels
+        original_labels.reshape(original_labels.shape[0], 1) == possible_labels
     )[1]
-    assert indices.shape[0] == labels.asarray().shape[0]  # if not, it means that some values not present in the dimension were found in the labels
+    assert indices.shape[0] == labels.values.shape[0]  # if not, it means that some values not present in the dimension were found in the labels
     
     one_hot_array = torch.eye(possible_labels.shape[0])[indices]
     return one_hot_array
