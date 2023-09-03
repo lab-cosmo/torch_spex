@@ -33,7 +33,7 @@ class PowerSpectrum(torch.nn.Module):
 
             block = TensorBlock(
                 values=ps_values_ai,
-                samples=spex.block(0).samples,
+                samples=spex.block({"lam": 0, "a_i": a_i}).samples,
                 components=[],
                 properties=Labels.range("property", ps_values_ai.shape[-1])
             )

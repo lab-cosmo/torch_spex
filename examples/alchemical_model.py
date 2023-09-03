@@ -148,8 +148,7 @@ class Model(torch.nn.Module):
         )
 
         if self.do_forces:
-            for structure_positions in structure_batch["positions"]:
-                structure_positions.requires_grad_(True)
+            structure_batch["positions"].requires_grad_(True)
 
         # print("Calculating spherical expansion")
         spherical_expansion = self.spherical_expansion_calculator(

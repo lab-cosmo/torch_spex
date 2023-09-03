@@ -1,4 +1,5 @@
 import torch
+import metatensor.torch
 from metatensor.torch import Labels
 from .le import get_le_spliner
 from .physical_le import get_physical_le_spliner
@@ -66,14 +67,14 @@ class RadialBasis(torch.nn.Module):
         radial_functions = self.spliner.compute(x)
 
         if self.is_alchemical:
-            one_hot_aj = one_hot(
+            one_hot_aj = metatensor.torch.one_hot(
                 samples_metadata,
                 Labels(  # this labels object could be a class member, but its values need to be moved from CPU to GPU with the model
                     names = ["species_neighbor"],
                     values = torch.tensor(self.all_species, dtype=torch.int, device=samples_metadata.values.device).unsqueeze(1)
                 )
             )
-            pseudo_species_weights = self.combination_matrix(one_hot_aj)
+            pseudo_species_weights = self.combination_matrix(one_hot_aj.to(dtype=radial_functions.dtype))
             radial_functions = radial_functions.unsqueeze(1)*pseudo_species_weights.unsqueeze(2)
             # Note: if the model is alchemical, now the radial basis has one extra dimension: the alpha_j dimension, which is in the middle
 

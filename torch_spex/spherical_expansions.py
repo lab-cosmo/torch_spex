@@ -183,7 +183,7 @@ class SphericalExpansion(torch.nn.Module):
             densities_l = densities[l]
             vectors_l_block = expanded_vectors.block({"l": l})
             vectors_l_block_components = vectors_l_block.components
-            vectors_l_block_n = torch.arange(len(torch.unique(vectors_l_block.properties.column("n"))), dtype=torch.int64)  # Need to be smarter to optimize
+            vectors_l_block_n = torch.arange(len(torch.unique(vectors_l_block.properties.column("n"))), dtype=torch.int64, device=species.device)  # Need to be smarter to optimize
             for a_i in self.all_species:
                 where_ai = torch.where(species == a_i)[0]
                 densities_ai_l = torch.index_select(densities_l, 0, where_ai)
