@@ -3,7 +3,7 @@ from torch_spex.structures import InMemoryDataset, TransformerNeighborList, Tran
 import torch
 from torch.utils.data import DataLoader
 
-import equistore
+import metatensor
 
 import json
 import ase.io

@@ -8,6 +8,9 @@ from torch_spex.atomic_composition import AtomicComposition
 from power_spectrum import PowerSpectrum
 from torch_spex.normalize import get_average_number_of_neighbors, normalize_true, normalize_false
 
+from typing import Dict
+from metatensor.torch import TensorMap
+
 # Conversions
 
 def get_conversions():
@@ -55,7 +58,7 @@ torch.manual_seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-# device = "cpu"
+device = "cpu"
 print(f"Training on {device}")
 
 conversions = get_conversions()
@@ -132,15 +135,21 @@ class Model(torch.nn.Module):
         self.comp_calculator = AtomicComposition(all_species)
         self.composition_coefficients = None  # Needs to be set from outside
         self.do_forces = do_forces
+        self.normalize = normalize
+        self.average_number_of_atoms = average_number_of_atoms
 
-    def forward(self, structure_batch, is_training=True):
+    def forward(self, structure_batch: Dict[str, torch.Tensor], is_training: bool = True):
 
         n_structures = len(structure_batch["positions"])
-        energies = torch.zeros((n_structures,), device=device, dtype=torch.get_default_dtype())
+        energies = torch.zeros(
+            (n_structures,),
+            dtype=structure_batch["positions"].dtype,
+            device=structure_batch["positions"].device,
+        )
 
         if self.do_forces:
             for structure_positions in structure_batch["positions"]:
-                structure_positions.requires_grad = True
+                structure_positions.requires_grad_(True)
 
         # print("Calculating spherical expansion")
         spherical_expansion = self.spherical_expansion_calculator(
@@ -157,10 +166,23 @@ class Model(torch.nn.Module):
         ps = self.ps_calculator(spherical_expansion)
 
         # print("Calculating energies")
-        self._apply_layer(energies, ps, self.nu2_model)
-        if normalize: energies = energies / np.sqrt(average_number_of_atoms)
+        atomic_energies = []
+        structure_indices = []
+        for ai, layer_ai in self.nu2_model.items():
+            block = ps.block({"a_i": int(ai)})
+            # print(block.values)
+            features = block.values.squeeze(dim=1)
+            structure_indices.append(block.samples.column("structure"))
+            atomic_energies.append(
+                layer_ai(features).squeeze(dim=-1)
+            )
+        atomic_energies = torch.concat(atomic_energies)
+        structure_indices = torch.concatenate(structure_indices)
+        # print("Before aggregation", torch.mean(atomic_energies), get_2_mom(atomic_energies))
+        energies.index_add_(dim=0, index=structure_indices, source=atomic_energies)
+        if self.normalize: energies = energies * self.average_number_of_atoms**(-0.5)
 
-        comp = self.comp_calculator.compute(
+        comp = self.comp_calculator(
             positions = structure_batch["positions"],
             cells = structure_batch["cells"],
             species = structure_batch["species"],
@@ -181,93 +203,66 @@ class Model(torch.nn.Module):
 
         return energies, forces
 
-    def predict_epoch(self, data_loader):
-        
-        predicted_energies = []
-        predicted_forces = []
+
+def predict_epoch(model, data_loader):
+    
+    predicted_energies = []
+    predicted_forces = []
+    for batch in data_loader:
+        batch.pop("energies")
+        batch.pop("forces")
+        predicted_energies_batch, predicted_forces_batch = model(batch, is_training=False)
+        predicted_energies.append(predicted_energies_batch)
+        predicted_forces.append(predicted_forces_batch)
+
+    predicted_energies = torch.concatenate(predicted_energies, dim=0)
+    predicted_forces = torch.concatenate(predicted_forces, dim=0)
+    return predicted_energies, predicted_forces
+
+
+def train_epoch(model, data_loader, force_weight):
+    
+    if optimizer_name == "Adam":
+        total_loss = 0.0
         for batch in data_loader:
-            batch.pop("energies")
-            batch.pop("forces")
-            predicted_energies_batch, predicted_forces_batch = model(batch, is_training=False)
-            predicted_energies.append(predicted_energies_batch)
-            predicted_forces.extend(predicted_forces_batch)  # the predicted forces for the batch are themselves a list
+            energies = batch.pop("energies")
+            forces = batch.pop("forces")
+            optimizer.zero_grad()
+            predicted_energies, predicted_forces = model(batch)
 
-        predicted_energies = torch.concatenate(predicted_energies, dim=0)
-        predicted_forces = torch.concatenate(predicted_forces, dim=0)
-        return predicted_energies, predicted_forces
-
-
-    def train_epoch(self, data_loader, force_weight):
-        
-        if optimizer_name == "Adam":
+            loss = get_sse(predicted_energies, energies)
+            if do_forces:
+                forces = forces.to(device)
+                loss += force_weight * get_sse(predicted_forces, forces)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+    else:
+        def closure():
+            optimizer.zero_grad()
             total_loss = 0.0
             for batch in data_loader:
                 energies = batch.pop("energies")
                 forces = batch.pop("forces")
-                optimizer.zero_grad()
                 predicted_energies, predicted_forces = model(batch)
 
                 loss = get_sse(predicted_energies, energies)
                 if do_forces:
                     forces = forces.to(device)
-                    predicted_forces = torch.concatenate(predicted_forces)
                     loss += force_weight * get_sse(predicted_forces, forces)
                 loss.backward()
-                optimizer.step()
                 total_loss += loss.item()
-        else:
-            def closure():
-                optimizer.zero_grad()
-                total_loss = 0.0
-                for batch in data_loader:
-                    energies = batch.pop("energies")
-                    forces = batch.pop("forces")
-                    predicted_energies, predicted_forces = model(batch)
+            print(total_loss)
+            return total_loss
 
-                    loss = get_sse(predicted_energies, energies)
-                    if do_forces:
-                        forces = forces.to(device)
-                        predicted_forces = torch.concatenate(predicted_forces)
-                        loss += force_weight * get_sse(predicted_forces, forces)
-                    loss.backward()
-                    total_loss += loss.item()
-                print(total_loss)
-                return total_loss
+        total_loss = optimizer.step(closure)
+    return total_loss
 
-            total_loss = optimizer.step(closure)
-        return total_loss
-
-    def _apply_layer(self, energies, tmap, layer):
-        atomic_energies = []
-        structure_indices = []
-        for a_i in self.all_species:
-            block = tmap.block({"a_i": a_i})
-            # print(block.values)
-            features = block.values.squeeze(dim=1)
-            structure_indices.append(block.samples["structure"])
-            atomic_energies.append(
-                layer[str(a_i)](features).squeeze(dim=-1)
-            )
-        atomic_energies = torch.concat(atomic_energies)
-        structure_indices = torch.concatenate(structure_indices)
-        # print("Before aggregation", torch.mean(atomic_energies), get_2_mom(atomic_energies))
-        
-        energies.index_add_(dim=0, index=structure_indices, source=atomic_energies)
-        # THIS IN-PLACE MODIFICATION HAS TO CHANGE!
-
-    # def print_state()... Would print loss, train errors, validation errors, test errors, ...
-
-model = Model(hypers, all_species, do_forces=do_forces).to(device)
-model = torch.jit.script(model)
-# print(model)
 
 if optimizer_name == "Adam":
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3) 
     batch_size = 8  # Batch for training speed
 else:
-    optimizer = torch.optim.LBFGS(model.parameters(), line_search_fn="strong_wolfe", history_size=128)
     batch_size = 128  # Batch for memory
-
 
 print("Precomputing neighborlists")
 
@@ -307,11 +302,21 @@ for batch in predict_train_data_loader:
     batch.pop("energies")
     batch.pop("forces")
     train_comp.append(
-        comp_calculator.compute(**batch)
+        comp_calculator(**batch)
     )
 train_comp = torch.concatenate(train_comp)
 c_comp = torch.linalg.solve(train_comp.T @ train_comp, train_comp.T @ train_energies)
+
+model = Model(hypers, all_species, do_forces=do_forces).to(device)
 model.composition_coefficients = c_comp
+model = torch.jit.script(model)
+# print(model)
+
+if optimizer_name == "Adam":
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3) 
+else:
+    optimizer = torch.optim.LBFGS(model.parameters(), line_search_fn="strong_wolfe", history_size=128)
+
 
 print("Finished linear fit for one-body energies")
 
@@ -343,8 +348,8 @@ for epoch in range(3):
 
     # print(torch.cuda.max_memory_allocated())
 
-    predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
-    predicted_test_energies, predicted_test_forces = model.predict_epoch(predict_test_data_loader)
+    predicted_train_energies, predicted_train_forces = predict_epoch(model, predict_train_data_loader)
+    predicted_test_energies, predicted_test_forces = predict_epoch(model, predict_test_data_loader)
 
     print()
     print(f"Epoch number {epoch}, Total loss: {get_sse(predicted_train_energies, train_energies)+force_weight*get_sse(predicted_train_forces, train_forces)}")
@@ -352,6 +357,6 @@ for epoch in range(3):
     if do_forces:
         print(f"Force errors: Train RMSE: {get_rmse(predicted_train_forces, train_forces)}, Train MAE: {get_mae(predicted_train_forces, train_forces)}, Test RMSE: {get_rmse(predicted_test_forces, test_forces)}, Test MAE: {get_mae(predicted_test_forces, test_forces)}")
 
-    _ = model.train_epoch(train_data_loader, force_weight)
+    _ = train_epoch(model, train_data_loader, force_weight)
 
 #print(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=20))

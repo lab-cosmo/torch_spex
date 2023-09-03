@@ -1,5 +1,5 @@
 import torch
-from equistore.torch import Labels
+from metatensor.torch import Labels
 
 
 def one_hot(labels: Labels, dimension: Labels) -> torch.Tensor:

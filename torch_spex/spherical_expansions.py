@@ -1,12 +1,11 @@
 import copy
 
-import numpy as np
+import math
 import torch
-from equistore.torch import TensorMap, Labels, TensorBlock
+from metatensor.torch import TensorMap, Labels, TensorBlock
 import sphericart.torch
 
 from .radial_basis import RadialBasis
-from .neighbor_list import get_neighbor_list
 from typing import Dict, List
 
 
@@ -30,7 +29,7 @@ class SphericalExpansion(torch.nn.Module):
     - **m**: order of spherical harmonics
 
     The indices of the coefficients are written to show the storage in an
-    equistore.TensorMap object
+    metatensor.TensorMap object
 
     .. math::
 
@@ -82,9 +81,9 @@ class SphericalExpansion(torch.nn.Module):
         self.normalize = True if "normalize" in hypers else False
         if self.normalize:
             avg_num_neighbors = hypers["normalize"]
-            self.normalization_factor = 1.0/np.sqrt(avg_num_neighbors)
+            self.normalization_factor = 1.0/math.sqrt(avg_num_neighbors)
             self.normalization_factor_0 = 1.0/avg_num_neighbors**(3/4)
-        self.all_species = torch.tensor(all_species, dtype=torch.long)  # convert potential list to torch.Tensor
+        self.all_species = all_species
         self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species, device=device)
 
         if "alchemical" in self.hypers:
@@ -94,8 +93,8 @@ class SphericalExpansion(torch.nn.Module):
             self.is_alchemical = False
 
     def forward(self,
-            positions: List[torch.Tensor],
-            cells: List[torch.Tensor],
+            positions: torch.Tensor,
+            cells: torch.Tensor,
             species: torch.Tensor,
             cell_shifts: torch.Tensor,
             centers: torch.Tensor,
@@ -137,9 +136,6 @@ class SphericalExpansion(torch.nn.Module):
 
         samples_metadata = expanded_vectors.block({"l": 0}).samples
 
-        s_metadata = structure_centers
-        i_metadata = centers
-
         n_species = len(self.all_species)
         species_to_index = {atomic_number : i_species for i_species, atomic_number in enumerate(self.all_species)}
 
@@ -162,11 +158,11 @@ class SphericalExpansion(torch.nn.Module):
                 densities_l.index_add_(dim=0, index=density_indices.to(expanded_vectors_l.device), source=expanded_vectors_l)
                 densities_l = densities_l.reshape((n_centers, 2*l+1, -1))
                 densities.append(densities_l)
-            unique_species = -torch.arange(self.n_pseudo_species, dtype=torch.int64)
+            unique_species = -torch.arange(self.n_pseudo_species, dtype=torch.int64, device=density_indices.device)
         else:
-            aj_metadata = samples_metadata["species_neighbor"]
-            aj_shifts = torch.LongTensor([species_to_index[aj_index] for aj_index in aj_metadata])
-            density_indices = torch.LongTensor(s_i_metadata_to_unique.cpu()*n_species+aj_shifts)
+            aj_metadata = samples_metadata.column("species_neighbor")
+            aj_shifts = torch.tensor([species_to_index[aj_index] for aj_index in aj_metadata], dtype=torch.int64, device=aj_metadata.device)
+            density_indices = s_i_metadata_to_unique*n_species+aj_shifts
 
             for l in range(l_max+1):
                 expanded_vectors_l = expanded_vectors.block({"l": l}).values
@@ -178,16 +174,16 @@ class SphericalExpansion(torch.nn.Module):
                 densities_l.index_add_(dim=0, index=density_indices.to(expanded_vectors_l.device), source=expanded_vectors_l)
                 densities_l = densities_l.reshape((n_centers, n_species, 2*l+1, -1)).swapaxes(1, 2).reshape((n_centers, 2*l+1, -1))  # need to swap n, a indices which are in the wrong order
                 densities.append(densities_l)
-            unique_species = self.all_species
+            unique_species = torch.tensor(self.all_species, dtype=torch.int, device=species.device)
 
         # constructs the TensorMap object
-        labels = []
-        blocks = []
+        labels : List[List[int]] = []
+        blocks : List[TensorBlock] = []
         for l in range(l_max+1):
             densities_l = densities[l]
             vectors_l_block = expanded_vectors.block({"l": l})
             vectors_l_block_components = vectors_l_block.components
-            vectors_l_block_n = torch.arange(len(torch.unique(vectors_l_block.properties["n"])), dtype=torch.int64)  # Need to be smarter to optimize
+            vectors_l_block_n = torch.arange(len(torch.unique(vectors_l_block.properties.column("n"))), dtype=torch.int64)  # Need to be smarter to optimize
             for a_i in self.all_species:
                 where_ai = torch.where(species == a_i)[0]
                 densities_ai_l = torch.index_select(densities_l, 0, where_ai)
@@ -208,14 +204,14 @@ class SphericalExpansion(torch.nn.Module):
                         components = vectors_l_block_components,
                         properties = Labels(
                             names = ["a1", "n1", "l1"],
-                            values = torch.tensor(np.stack(
+                            values = torch.stack(
                                 [
-                                    np.repeat(unique_species, vectors_l_block_n.shape[0]),
-                                    np.tile(vectors_l_block_n, unique_species.shape[0]),
-                                    l*np.ones((densities_ai_l.shape[2],), dtype=np.int32)
+                                    torch.repeat_interleave(unique_species, vectors_l_block_n.shape[0]),
+                                    torch.tile(vectors_l_block_n, (unique_species.shape[0],)),
+                                    l*torch.ones((densities_ai_l.shape[2],), dtype=torch.int, device=densities_ai_l.device)
                                 ],
-                                axis=1
-                            ))
+                                dim=1
+                            )
                         )
                     )
                 )
@@ -250,7 +246,7 @@ class VectorExpansion(torch.nn.Module):
     - **m**: order of spherical harmonics
 
     The indices of the coefficients are written to show the storage in an
-    equistore.TensorMap object
+    metatensor.TensorMap object
 
     .. math::
 
@@ -279,8 +275,8 @@ class VectorExpansion(torch.nn.Module):
         self.spherical_harmonics_split_list = [(2*l+1) for l in range(self.l_max+1)]
 
     def forward(self,
-            positions: List[torch.Tensor],
-            cells: List[torch.Tensor],
+            positions: torch.Tensor,
+            cells: torch.Tensor,
             species: torch.Tensor,
             cell_shifts: torch.Tensor,
             centers: torch.Tensor,
@@ -317,8 +313,6 @@ class VectorExpansion(torch.nn.Module):
             :math:`c^{l}_{Aija_ia_j,m,n}`
         """
 
-        positions = torch.concatenate(positions)
-        cells = torch.stack(cells)
         cartesian_vectors = get_cartesian_vectors(positions, cells, species, cell_shifts, centers, pairs, structure_centers, structure_pairs, structure_offsets)
 
         bare_cartesian_vectors = cartesian_vectors.values.squeeze(dim=-1)
@@ -330,11 +324,11 @@ class VectorExpansion(torch.nn.Module):
         radial_basis = self.radial_basis_calculator(r, samples_metadata)
 
         spherical_harmonics = self.spherical_harmonics_calculator.compute(bare_cartesian_vectors)  # Get the spherical harmonics
-        if self.normalize: spherical_harmonics *= np.sqrt(4*np.pi)
+        if self.normalize: spherical_harmonics *= (4*torch.pi)**(0.5)  # normalize them
         spherical_harmonics = torch.split(spherical_harmonics, self.spherical_harmonics_split_list, dim=1)  # Split them into l chunks
 
-        # Use broadcasting semantics to get the products in equistore shape
-        vector_expansion_blocks = []
+        # Use broadcasting semantics to get the products in metatensor shape
+        vector_expansion_blocks : List[TensorBlock] = []
         for l, (radial_basis_l, spherical_harmonics_l) in enumerate(zip(radial_basis, spherical_harmonics)):
             if self.is_alchemical:  # If the model is alchemical, the radial basis has one extra dimension (alpha_j)
                 vector_expansion_l = radial_basis_l.unsqueeze(1) * spherical_harmonics_l.unsqueeze(2).unsqueeze(3)
@@ -345,13 +339,13 @@ class VectorExpansion(torch.nn.Module):
             if self.is_alchemical:
                 properties = Labels(
                     names = ["alpha_j", "n"],
-                    values = torch.tensor(np.stack(
+                    values = torch.stack(
                         [
-                            np.repeat(-np.arange(self.n_pseudo_species), n_max_l),
-                            np.tile(np.arange(n_max_l), self.n_pseudo_species)
+                            torch.repeat_interleave(-torch.arange(self.n_pseudo_species, dtype=torch.int64, device=vector_expansion_l.device), n_max_l),
+                            torch.tile(torch.arange(n_max_l, dtype=torch.int64, device=vector_expansion_l.device), (self.n_pseudo_species,))
                         ],
-                        axis=1
-                    ))
+                        dim=1
+                    )
                 )
             else:
                 properties = Labels.range("n", n_max_l)
@@ -383,7 +377,7 @@ def get_cartesian_vectors(positions, cells, species, cell_shifts, centers, pairs
     """
     Wraps direction vectors into TensorBlock object with metadata information
     """
-    
+
     # calculate interatomic vectors
     pairs_offsets = structure_offsets[structure_pairs]
     shifted_pairs = pairs_offsets[:, None] + pairs

@@ -25,7 +25,7 @@ setup(
         'ase',
         'torch',
         'scipy',
-        'equistore-torch @ https://github.com/lab-cosmo/equistore/archive/47ce45b.zip#subdirectory=python/equistore-torch'
+        'metatensor-torch'
     ],
     dependency_links = dependency_links
 )

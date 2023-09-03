@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 import ase
 from ase import io
 
-import equistore
+import metatensor
 def test_autograd():
     torch.manual_seed(0)
 
@@ -47,7 +47,7 @@ def test_autograd():
                 positions.requires_grad = True
             if is_compute_forces:
                 spherical_expansion = self.spherical_expansion_calculator(**spherical_expansion_kwargs)
-                tm = equistore.sum_over_samples(spherical_expansion, sample_names="center").components_to_properties(["m"]).keys_to_properties(["a_i", "lam", "sigma"])
+                tm = metatensor.sum_over_samples(spherical_expansion, sample_names="center").components_to_properties(["m"]).keys_to_properties(["a_i", "lam", "sigma"])
                 energies = torch.sum(tm.block().values, axis=1)
 
                 gradient = torch.autograd.grad(
