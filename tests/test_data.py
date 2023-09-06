@@ -7,7 +7,6 @@ import metatensor
 
 import json
 import ase.io
-import numpy as np
 
 def test_in_memory_neighbor_list():
 

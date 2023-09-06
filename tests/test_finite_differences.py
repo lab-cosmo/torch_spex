@@ -27,7 +27,7 @@ def test_autograd():
             "mlp": False
         }
     }
-    all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
+    all_species = list(np.unique(np.hstack([frame.numbers for frame in frames])))
 
     transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"])]
     dataset = InMemoryDataset(frames, transformers)

@@ -20,7 +20,7 @@ class TestEthanol1SphericalExpansion:
     """
     device = "cpu"
     frames = ase.io.read('datasets/rmd17/ethanol1.extxyz', ':1')
-    all_species = np.unique([frame.numbers for frame in frames])
+    all_species = list(np.unique([frame.numbers for frame in frames]))
     with open("tests/data/expansion_coeffs-ethanol1_0-hypers.json", "r") as f:
         hypers = json.load(f)
 
@@ -80,7 +80,7 @@ class TestArtificialSphericalExpansion:
     """
     device = "cpu"
     frames = ase.io.read('tests/datasets/artificial.extxyz', ':')
-    all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
+    all_species = list(np.unique(np.hstack([frame.numbers for frame in frames])))
     with open("tests/data/expansion_coeffs-artificial-hypers.json", "r") as f:
         hypers = json.load(f)
 

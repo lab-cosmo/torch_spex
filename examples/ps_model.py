@@ -6,6 +6,8 @@ from torch_spex.spherical_expansions import SphericalExpansion
 from power_spectrum import PowerSpectrum
 from torch_spex.structures import InMemoryDataset, TransformerNeighborList, TransformerProperty, collate_nl
 
+from typing import Dict
+
 # Conversions
 
 def get_conversions():
@@ -71,7 +73,7 @@ hypers = {
     "cutoff radius": r_cut,
     "radial basis": {
         "mlp": True,
-        "type": "physical",
+        "type": "le",
         "scale": 1.7,
         "E_max": 3000,
         "normalize": True,
@@ -80,6 +82,7 @@ hypers = {
 }
 
 all_species = np.sort(np.unique(np.concatenate([train_structure.numbers for train_structure in train_structures] + [test_structure.numbers for test_structure in test_structures])))
+all_species = [int(species) for species in all_species]  # convert to Python ints for tracer
 print(f"All species: {all_species}")
 
 
@@ -111,24 +114,44 @@ class Model(torch.nn.Module):
             ) for a_i in self.all_species
         })
         # """
-        self.energy_shift = None  # To be set from outside
+        self.energy_shift = 0.0  # to be set from outside. Could also be a nn.Parameter
         self.do_forces = do_forces
 
-    def forward(self, structures, is_training=True):
+    def forward(self, structures: Dict[str, torch.Tensor], is_training: bool = True):
 
         # print("Transforming structures")
-        energies = torch.zeros((len(structures["positions"]),), device=device, dtype=torch.get_default_dtype())
+        energies = torch.zeros((len(structures["cells"]),), device=structures["positions"].device, dtype=structures["positions"].dtype)
 
         if self.do_forces:
-            for structure_positions in structures["positions"]:
-                structure_positions.requires_grad = True
+            structures["positions"].requires_grad_(True)
 
         # print("Calculating spherical expansion")
-        spherical_expansion = self.spherical_expansion_calculator(**structures)
+        spherical_expansion = self.spherical_expansion_calculator(
+            positions = structures["positions"],
+            cells = structures["cells"],
+            species = structures["species"],
+            cell_shifts = structures["cell_shifts"],
+            centers = structures["centers"],
+            pairs = structures["pairs"],
+            structure_centers = structures["structure_centers"],
+            structure_pairs = structures["structure_pairs"],
+            structure_offsets = structures["structure_offsets"]
+        )
         ps = self.ps_calculator(spherical_expansion)
 
-        # print("Calculating energies")
-        self._apply_layer(energies, ps, self.nu2_model)
+        atomic_energies = []
+        structure_indices = []
+        for ai, model_ai in self.nu2_model.items():
+            block = ps.block({"a_i": int(ai)})
+            features = block.values.squeeze(dim=1)
+            structure_indices.append(block.samples.column("structure"))
+            atomic_energies.append(
+                model_ai(features).squeeze(dim=-1)
+            )
+        atomic_energies = torch.concat(atomic_energies)
+        structure_indices = torch.concatenate(structure_indices)
+        
+        energies.index_add_(dim=0, index=structure_indices, source=atomic_energies)
         energies += self.energy_shift
 
         # print("Computing forces by backpropagation")
@@ -139,76 +162,66 @@ class Model(torch.nn.Module):
 
         return energies, forces
 
-    def predict_epoch(self, data_loader):
-        
-        predicted_energies = []
-        predicted_forces = []
+
+def predict_epoch(model, data_loader):
+    
+    predicted_energies = []
+    predicted_forces = []
+    for batch in data_loader:
+        batch.pop("energies")
+        if model.do_forces: batch.pop("forces")
+        predicted_energies_batch, predicted_forces_batch = model(batch, is_training=False)
+        predicted_energies.append(predicted_energies_batch)
+        if model.do_forces: predicted_forces.append(predicted_forces_batch)  # the predicted forces for the batch are themselves a list
+
+    predicted_energies = torch.concatenate(predicted_energies, dim=0)
+    if model.do_forces: predicted_forces = torch.concatenate(predicted_forces, dim=0)
+    return predicted_energies, predicted_forces
+
+
+def train_epoch(model, data_loader, force_weight):
+    
+    if optimizer_name == "Adam":
+        total_loss = 0.0
         for batch in data_loader:
-            batch.pop("energies")
-            if self.do_forces: batch.pop("forces")
-            predicted_energies_batch, predicted_forces_batch = model(batch, is_training=False)
-            predicted_energies.append(predicted_energies_batch)
-            if self.do_forces: predicted_forces.extend(predicted_forces_batch)  # the predicted forces for the batch are themselves a list
-
-        predicted_energies = torch.concatenate(predicted_energies, dim=0)
-        if self.do_forces: predicted_forces = torch.concatenate(predicted_forces, dim=0)
-        return predicted_energies, predicted_forces
-
-    def train_epoch(self, data_loader, force_weight):
-        
-        if optimizer_name == "Adam":
-            total_loss = 0.0
-            for batch in data_loader:
-                optimizer.zero_grad()
+            optimizer.zero_grad()
+            energies = batch.pop("energies")
+            if model.do_forces: forces = batch.pop("forces")
+            predicted_energies, predicted_forces = model(batch)
+            loss = get_sse(predicted_energies, energies)
+            if model.do_forces:
+                loss += force_weight * get_sse(predicted_forces, forces)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+    else:
+        def closure():
+            optimizer.zero_grad()
+            for train_structures in data_loader:
+                predicted_energies, predicted_forces = model(train_structures)
                 energies = batch.pop("energies")
                 if self.do_forces: forces = batch.pop("forces")
-                predicted_energies, predicted_forces = model(batch)
                 loss = get_sse(predicted_energies, energies)
-                if self.do_forces:
-                    predicted_forces = torch.concatenate(predicted_forces)
+                if do_forces:
                     loss += force_weight * get_sse(predicted_forces, forces)
-                loss.backward()
-                optimizer.step()
-                total_loss += loss.item()
-        else:
-            def closure():
-                optimizer.zero_grad()
-                for train_structures in data_loader:
-                    predicted_energies, predicted_forces = model(train_structures)
-                    energies = batch.pop("energies")
-                    if self.do_forces: forces = batch.pop("forces")
-                    loss = get_sse(predicted_energies, energies)
-                    if do_forces:
-                        predicted_forces = torch.concatenate(predicted_forces)
-                        loss += force_weight * get_sse(predicted_forces, forces)
-                loss.backward()
-                print(loss.item())
-                return loss
-            loss = optimizer.step(closure)
-            total_loss = loss.item()
+            loss.backward()
+            print(loss.item())
+            return loss
+        loss = optimizer.step(closure)
+        total_loss = loss.item()
 
-        return total_loss
+    return total_loss
 
-    def _apply_layer(self, energies, tmap, layer):
-        atomic_energies = []
-        structure_indices = []
-        for a_i in self.all_species:
-            block = tmap.block(a_i=a_i)
-            features = block.values.squeeze(dim=1)
-            structure_indices.append(block.samples["structure"])
-            atomic_energies.append(
-                layer[str(a_i)](features).squeeze(dim=-1)
-            )
-        atomic_energies = torch.concat(atomic_energies)
-        structure_indices = torch.LongTensor(np.concatenate(structure_indices))
-        
-        energies.index_add_(dim=0, index=structure_indices.to(device), source=atomic_energies)
-
-
-    # def print_state()... Would print loss, train errors, validation errors, test errors, ...
 
 model = Model(hypers, all_species, do_forces=do_forces).to(device)
-# print(model)
+
+# Deactivate kernel fusion which slows down the model.
+# With kernel fusion, our model would be recompiled at every call
+# due to the varying shapes of the involved tensors (neighborlists 
+# can vary between different structures and batches)
+# Perhaps [("DYNAMIC", 1)] can offer better performance
+torch.jit.set_fusion_strategy([("DYNAMIC", 0)])
+model = torch.jit.script(model)
 
 if optimizer_name == "Adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3) 
@@ -251,8 +264,8 @@ if do_forces:
 
 for epoch in range(1000):
 
-    predicted_train_energies, predicted_train_forces = model.predict_epoch(predict_train_data_loader)
-    predicted_test_energies, predicted_test_forces = model.predict_epoch(predict_test_data_loader)
+    predicted_train_energies, predicted_train_forces = predict_epoch(model, predict_train_data_loader)
+    predicted_test_energies, predicted_test_forces = predict_epoch(model, predict_test_data_loader)
 
     print()
     if do_forces:
@@ -263,4 +276,4 @@ for epoch in range(1000):
     if do_forces:
         print(f"Force errors: Train RMSE: {get_rmse(predicted_train_forces, train_forces)}, Train MAE: {get_mae(predicted_train_forces, train_forces)}, Test RMSE: {get_rmse(predicted_test_forces, test_forces)}, Test MAE: {get_mae(predicted_test_forces, test_forces)}")
 
-    _ = model.train_epoch(train_data_loader, force_weight)
+    _ = train_epoch(model, train_data_loader, force_weight)

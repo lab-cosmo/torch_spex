@@ -316,7 +316,6 @@ model.composition_coefficients = c_comp
 # Perhaps [("DYNAMIC", 1)] can offer better performance
 torch.jit.set_fusion_strategy([("DYNAMIC", 0)])
 model = torch.jit.script(model)
-# print(model)
 
 if optimizer_name == "Adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3) 
