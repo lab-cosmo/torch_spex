@@ -4,6 +4,7 @@ import pytest
 
 import torch
 
+import metatensor.torch
 from metatensor.torch import Labels, TensorBlock, TensorMap
 import numpy as np
 import ase.io

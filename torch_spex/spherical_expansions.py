@@ -47,6 +47,7 @@ class SphericalExpansion(torch.nn.Module):
         https://doi.org/10.1063/5.0124363
 
     >>> import numpy as np
+    >>> import torch
     >>> from torch.utils.data import DataLoader
     >>> from ase.build import molecule
     >>> from torch_spex.structures import InMemoryDataset, TransformerNeighborList, collate_nl
@@ -65,12 +66,14 @@ class SphericalExpansion(torch.nn.Module):
     >>> dataset = InMemoryDataset([h2o], transformers)
     >>> loader = DataLoader(dataset, batch_size=1, collate_fn=collate_nl)
     >>> batch = next(iter(loader))
-    >>> spherical_expansion = SphericalExpansion(hypers, [1, 8], device="cpu")
-    >>> spherical_expansion.forward(**batch)
-    TensorMap with 2 blocks
-    keys: a_i  lam  sigma
-           1    0     1
-           8    0     1
+    >>> spherical_expansion = SphericalExpansion(hypers, [1, 8], device="cpu").to(torch.float64) #why?BUG
+    >>> expansion = spherical_expansion.forward(**batch)
+    >>> print(expansion.keys)
+    Labels(
+        a_i  lam  sigma
+         1    0     1
+         8    0     1
+    )
 
     """
 

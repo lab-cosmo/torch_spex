@@ -4,7 +4,6 @@ from metatensor.torch import Labels
 from .le import get_le_spliner
 from .physical_le import get_physical_le_spliner
 from .normalize import normalize_true, normalize_false
-from .temporary_one_hot import one_hot
 
 
 class RadialBasis(torch.nn.Module):
