@@ -5,14 +5,14 @@ import pytest
 import torch
 
 import metatensor
-from metatensor import Labels, TensorBlock, TensorMap
+from metatensor.torch import Labels, TensorBlock, TensorMap
 import numpy as np
 import ase.io
 
 from torch_spex.spherical_expansions import VectorExpansion, SphericalExpansion
 from torch_spex.structures import InMemoryDataset, TransformerNeighborList, collate_nl
 from torch.utils.data import DataLoader
-from metatensor import TensorMap, TensorBlock, Labels
+from metatensor.torch import TensorMap, TensorBlock, Labels
 
 class TestEthanol1SphericalExpansion:
     """
