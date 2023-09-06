@@ -83,6 +83,9 @@ class SphericalExpansion(torch.nn.Module):
             avg_num_neighbors = hypers["normalize"]
             self.normalization_factor = 1.0/math.sqrt(avg_num_neighbors)
             self.normalization_factor_0 = 1.0/avg_num_neighbors**(3/4)
+        else:
+            self.normalization_factor = 1.0  # dummy for torchscript
+            self.normalization_factor_0 = 1.0  # dummy for torchscript
         self.all_species = all_species
         self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species, device=device)
 
@@ -91,6 +94,7 @@ class SphericalExpansion(torch.nn.Module):
             self.n_pseudo_species = self.hypers["alchemical"]
         else:
             self.is_alchemical = False
+            self.n_pseudo_species = 0  # dummy for torchscript
 
     def forward(self,
             positions: torch.Tensor,
@@ -161,7 +165,7 @@ class SphericalExpansion(torch.nn.Module):
             unique_species = -torch.arange(self.n_pseudo_species, dtype=torch.int64, device=density_indices.device)
         else:
             aj_metadata = samples_metadata.column("species_neighbor")
-            aj_shifts = torch.tensor([species_to_index[aj_index] for aj_index in aj_metadata], dtype=torch.int64, device=aj_metadata.device)
+            aj_shifts = torch.tensor([species_to_index[int(aj_index)] for aj_index in aj_metadata], dtype=torch.int64, device=aj_metadata.device)
             density_indices = s_i_metadata_to_unique*n_species+aj_shifts
 
             for l in range(l_max+1):
@@ -268,6 +272,7 @@ class VectorExpansion(torch.nn.Module):
             self.n_pseudo_species = self.hypers["alchemical"]
             hypers_radial_basis["alchemical"] = self.hypers["alchemical"]
         else:
+            self.n_pseudo_species = 0  # dummy for torchscript
             self.is_alchemical = False
         self.radial_basis_calculator = RadialBasis(hypers_radial_basis, all_species, device=device)
         self.l_max = self.radial_basis_calculator.l_max

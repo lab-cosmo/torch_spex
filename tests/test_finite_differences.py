@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 import ase
 from ase import io
 
-import metatensor
+import metatensor.torch
 def test_autograd():
     torch.manual_seed(0)
 
@@ -43,11 +43,10 @@ def test_autograd():
             self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
 
         def forward(self, spherical_expansion_kwargs, is_compute_forces=True):
-            for positions in spherical_expansion_kwargs["positions"]:
-                positions.requires_grad = True
+            spherical_expansion_kwargs["positions"].requires_grad = True
             if is_compute_forces:
                 spherical_expansion = self.spherical_expansion_calculator(**spherical_expansion_kwargs)
-                tm = metatensor.sum_over_samples(spherical_expansion, sample_names="center").components_to_properties(["m"]).keys_to_properties(["a_i", "lam", "sigma"])
+                tm = metatensor.torch.sum_over_samples(spherical_expansion, samples_names="center").components_to_properties(["m"]).keys_to_properties(["a_i", "lam", "sigma"])
                 energies = torch.sum(tm.block().values, axis=1)
 
                 gradient = torch.autograd.grad(
