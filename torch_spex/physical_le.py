@@ -239,6 +239,8 @@ def get_physical_le_spliner(E_max, r_cut, r0, normalize, cost_trade_off, device)
         n, l = index_to_nl(index, n_max_l)
         return function_for_splining_derivative(n, l, r)
 
+    n_max_l = [int(n_max) for n_max in n_max_l]
+
     return n_max_l, generate_splines(
         function_for_splining_index,
         function_for_splining_index_derivative,
