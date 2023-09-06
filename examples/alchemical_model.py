@@ -58,7 +58,7 @@ torch.manual_seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-device = "cpu"
+# device = "cpu"
 print(f"Training on {device}")
 
 conversions = get_conversions()
@@ -140,7 +140,7 @@ class Model(torch.nn.Module):
 
     def forward(self, structure_batch: Dict[str, torch.Tensor], is_training: bool = True):
 
-        n_structures = len(structure_batch["positions"])
+        n_structures = structure_batch["cells"].shape[0]
         energies = torch.zeros(
             (n_structures,),
             dtype=structure_batch["positions"].dtype,
@@ -308,6 +308,13 @@ c_comp = torch.linalg.solve(train_comp.T @ train_comp, train_comp.T @ train_ener
 
 model = Model(hypers, all_species, do_forces=do_forces).to(device)
 model.composition_coefficients = c_comp
+
+# Deactivate kernel fusion which slows down the model.
+# With kernel fusion, our model would be recompiled at every call
+# due to the varying shapes of the involved tensors (neighborlists 
+# can vary between different structures and batches)
+# Perhaps [("DYNAMIC", 1)] can offer better performance
+torch.jit.set_fusion_strategy([("DYNAMIC", 0)])
 model = torch.jit.script(model)
 # print(model)
 
