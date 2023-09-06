@@ -13,12 +13,12 @@ def compute_forces(
         create_graph=is_training,
     )[0]
     if gradient is None:
-raise ValueError(
-  "Unexpected None value for computed gradient. torch.autograd.grad input arguments:\n"
-  f"  outputs={[energy]!r},\n"
-  f"  inputs={[positions]!r},\n"
-  f"  retain_graph={is_training},\n"
-  f"  create_graph={is_training}")
+        raise ValueError(
+        "Unexpected None value for computed gradient. torch.autograd.grad input arguments:\n"
+        f"  outputs={[energy]!r},\n"
+        f"  inputs={[positions]!r},\n"
+        f"  retain_graph={is_training},\n"
+        f"  create_graph={is_training}")
     else:
         return -gradient
 

@@ -27,7 +27,7 @@ class RadialBasis(torch.nn.Module):
             # None for now) from outside
             self.n_max_l, self.spliner = None, None
         else:
-            raise ValueError(f"unsupported radial basis type {hypers["type"]!r}")
+            raise ValueError(f"unsupported radial basis type {hypers['type']!r}")
         
         self.all_species = all_species
         self.n_max_l = list(self.n_max_l)
@@ -36,10 +36,15 @@ class RadialBasis(torch.nn.Module):
             self.is_alchemical = True
             self.n_pseudo_species = hypers["alchemical"]
             self.combination_matrix = normalize("embedding", torch.nn.Linear(len(all_species), self.n_pseudo_species, bias=False))
+            self.species_neighbor_labels = Labels(
+                names = ["species_neighbor"],
+                values = torch.tensor(self.all_species, dtype=torch.int).unsqueeze(1)
+            )
         else:
             self.is_alchemical = False
             self.n_pseudo_species = 0  # dummy for torchscript
             self.combination_matrix = torch.nn.Linear(0, 0)  # dummy for torchscript
+            self.species_neighbor_labels = Labels.empty("dummy")
         
         self.apply_mlp = False
         if hypers["mlp"]:
@@ -70,10 +75,7 @@ class RadialBasis(torch.nn.Module):
         if self.is_alchemical:
             one_hot_aj = metatensor.torch.one_hot(
                 samples_metadata,
-                Labels(  # this labels object could be a class member, but its values need to be moved from CPU to GPU with the model
-                    names = ["species_neighbor"],
-                    values = torch.tensor(self.all_species, dtype=torch.int, device=samples_metadata.values.device).unsqueeze(1)
-                )
+                self.species_neighbor_labels.to(samples_metadata.values.device)
             )
             pseudo_species_weights = self.combination_matrix(one_hot_aj.to(dtype=radial_functions.dtype))
             radial_functions = radial_functions.unsqueeze(1)*pseudo_species_weights.unsqueeze(2)
