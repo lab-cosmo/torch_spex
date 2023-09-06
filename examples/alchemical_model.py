@@ -83,7 +83,7 @@ hypers = {
     "cutoff radius": r_cut,
     "radial basis": {
         "mlp": True,
-        "type": "le",
+        "type": "physical",
         "scale": 3.0,
         "E_max": 500,
         "normalize": True,
@@ -350,7 +350,7 @@ with profile(
 ) as prof:
 """
 
-for epoch in range(3):
+for epoch in range(1000):
 
     # print(torch.cuda.max_memory_allocated())
 

@@ -25,7 +25,7 @@ setup(
         'ase',
         'torch',
         'scipy',
-        'metatensor-torch'
+        'metatensor-torch @ https://github.com/lab-cosmo/metatensor/archive/b17bc4d.zip#subdirectory=python/metatensor-torch',
     ],
     dependency_links = dependency_links
 )
