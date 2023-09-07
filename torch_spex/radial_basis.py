@@ -27,7 +27,7 @@ class RadialBasis(torch.nn.Module):
             # None for now) from outside
             self.n_max_l, self.spliner = None, None
         else:
-            raise ValueError("unsupported radial basis")
+            raise ValueError(f"unsupported radial basis type {hypers["type"]!r}")
         
         self.all_species = all_species
         self.n_max_l = list(self.n_max_l)
