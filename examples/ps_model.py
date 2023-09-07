@@ -73,7 +73,7 @@ hypers = {
     "cutoff radius": r_cut,
     "radial basis": {
         "mlp": True,
-        "type": "le",
+        "type": "physical",
         "scale": 1.7,
         "E_max": 3000,
         "normalize": True,
