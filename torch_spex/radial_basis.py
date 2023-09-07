@@ -62,6 +62,11 @@ class RadialBasis(torch.nn.Module):
                     normalize("linear_no_bias", torch.nn.Linear(32, self.n_max_l[l], bias=False))
                 ) for aj in self.all_species_names for l in range(self.l_max+1)
             })
+        else:  # make torchscript happy
+            self.apply_mlp = False
+            self.all_species_names = []
+            self.radial_mlps = torch.nn.ModuleDict({})
+        
         self.split_dimension = 2 if self.is_alchemical else 1
 
     def radial_transform(self, r):
@@ -73,9 +78,10 @@ class RadialBasis(torch.nn.Module):
         radial_functions = self.spliner.compute(x)
 
         if self.is_alchemical:
+            self.species_neighbor_labels.to(samples_metadata.values.device)  # Move device if needed
             one_hot_aj = metatensor.torch.one_hot(
                 samples_metadata,
-                self.species_neighbor_labels.to(samples_metadata.values.device)
+                self.species_neighbor_labels
             )
             pseudo_species_weights = self.combination_matrix(one_hot_aj.to(dtype=radial_functions.dtype))
             radial_functions = radial_functions.unsqueeze(1)*pseudo_species_weights.unsqueeze(2)
