@@ -1,18 +1,15 @@
 import json
 
-import pytest
-
 import torch
 
-import equistore
-from equistore import Labels, TensorBlock, TensorMap
+import metatensor.torch
+from metatensor.torch import Labels, TensorBlock, TensorMap
 import numpy as np
 import ase.io
 
 from torch_spex.spherical_expansions import VectorExpansion, SphericalExpansion
 from torch_spex.structures import InMemoryDataset, TransformerNeighborList, collate_nl
 from torch.utils.data import DataLoader
-from equistore import TensorMap, TensorBlock, Labels
 
 class TestEthanol1SphericalExpansion:
     """
@@ -20,7 +17,7 @@ class TestEthanol1SphericalExpansion:
     """
     device = "cpu"
     frames = ase.io.read('datasets/rmd17/ethanol1.extxyz', ':1')
-    all_species = np.unique([frame.numbers for frame in frames])
+    all_species = list(np.unique([frame.numbers for frame in frames]))
     with open("tests/data/expansion_coeffs-ethanol1_0-hypers.json", "r") as f:
         hypers = json.load(f)
 
@@ -30,7 +27,7 @@ class TestEthanol1SphericalExpansion:
     batch = next(iter(loader))
 
     def test_vector_expansion_coeffs(self):
-        tm_ref = equistore.core.io.load_custom_array("tests/data/vector_expansion_coeffs-ethanol1_0-data.npz", equistore.core.io.create_torch_array)
+        tm_ref = metatensor.torch.load("tests/data/vector_expansion_coeffs-ethanol1_0-data.npz")
         # we need to sort both computed and reference pair expansion coeffs,
         # because ase.neighborlist can get different neighborlist order for some reasons
         tm_ref = sort_tm(tm_ref)
@@ -40,22 +37,22 @@ class TestEthanol1SphericalExpansion:
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
         # Because the reference value have been cacluated using float32 and
         # now we using float64 computation the accuracy had to be decreased again
-        assert equistore.operations.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
 
     def test_spherical_expansion_coeffs(self):
-        tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-ethanol1_0-data.npz", equistore.core.io.create_torch_array)
+        tm_ref = metatensor.torch.load("tests/data/spherical_expansion_coeffs-ethanol1_0-data.npz")
         spherical_expansion_calculator = SphericalExpansion(self.hypers, self.all_species, device=self.device)
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(**self.batch)
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
         # Because the reference value have been cacluated using float32 and
         # now we using float64 computation the accuracy had to be decreased again
-        assert equistore.operations.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
 
     def test_spherical_expansion_coeffs_alchemical(self):
         with open("tests/data/expansion_coeffs-ethanol1_0-alchemical-hypers.json", "r") as f:
             hypers = json.load(f)
-        tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-ethanol1_0-alchemical-seed0-data.npz", equistore.core.io.create_torch_array)
+        tm_ref = metatensor.torch.load("tests/data/spherical_expansion_coeffs-ethanol1_0-alchemical-seed0-data.npz")
         torch.manual_seed(0)
         spherical_expansion_calculator = SphericalExpansion(hypers, self.all_species, device=self.device)
         # Because setting seed seems not be enough to get the same initial combination matrix
@@ -72,7 +69,7 @@ class TestEthanol1SphericalExpansion:
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
         # Because the reference value have been cacluated using float32 and
         # now we using float64 computation the accuracy had to be decreased again
-        assert equistore.operations.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
 
 class TestArtificialSphericalExpansion:
     """
@@ -80,7 +77,7 @@ class TestArtificialSphericalExpansion:
     """
     device = "cpu"
     frames = ase.io.read('tests/datasets/artificial.extxyz', ':')
-    all_species = np.unique(np.hstack([frame.numbers for frame in frames]))
+    all_species = list(np.unique(np.hstack([frame.numbers for frame in frames])))
     with open("tests/data/expansion_coeffs-artificial-hypers.json", "r") as f:
         hypers = json.load(f)
 
@@ -90,26 +87,26 @@ class TestArtificialSphericalExpansion:
     batch = next(iter(loader))
 
     def test_vector_expansion_coeffs(self):
-        tm_ref = equistore.core.io.load_custom_array("tests/data/vector_expansion_coeffs-artificial-data.npz", equistore.core.io.create_torch_array)
+        tm_ref = metatensor.torch.load("tests/data/vector_expansion_coeffs-artificial-data.npz")
         tm_ref = sort_tm(tm_ref)
         vector_expansion = VectorExpansion(self.hypers, self.all_species, device=self.device)
         with torch.no_grad():
             tm = sort_tm(vector_expansion.forward(**self.batch))
-        assert equistore.operations.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
 
     def test_spherical_expansion_coeffs(self):
-        tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-artificial-data.npz", equistore.core.io.create_torch_array)
+        tm_ref = metatensor.torch.load("tests/data/spherical_expansion_coeffs-artificial-data.npz")
         spherical_expansion_calculator = SphericalExpansion(self.hypers, self.all_species, device=self.device)
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(**self.batch)
         # The absolute accuracy is a bit smaller than in the ethanol case
         # I presume it is because we use 5 frames instead of just one
-        assert equistore.operations.allclose(tm_ref, tm, atol=3e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(tm_ref, tm, atol=3e-5, rtol=1e-5)
 
     def test_spherical_expansion_coeffs_artificial(self):
         with open("tests/data/expansion_coeffs-artificial-alchemical-hypers.json", "r") as f:
             hypers = json.load(f)
-        tm_ref = equistore.core.io.load_custom_array("tests/data/spherical_expansion_coeffs-artificial-alchemical-seed0-data.npz", equistore.core.io.create_torch_array)
+        tm_ref = metatensor.torch.load("tests/data/spherical_expansion_coeffs-artificial-alchemical-seed0-data.npz")
         spherical_expansion_calculator = SphericalExpansion(hypers, self.all_species, device=self.device)
         with torch.no_grad():
             spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.combination_matrix.weight.copy_(
@@ -121,9 +118,9 @@ class TestArtificialSphericalExpansion:
             )
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(**self.batch)
-        assert equistore.operations.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
 
-### these util functions will be removed once lab-cosmo/equistore/pull/281 is merged
+### these util functions will be removed once lab-cosmo/metatensor/pull/281 is merged
 def native_list_argsort(native_list):
     return sorted(range(len(native_list)), key=native_list.__getitem__)
 

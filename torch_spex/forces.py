@@ -1,17 +1,24 @@
 import torch
-from typing import List
+from typing import List, Optional
 
 def compute_forces(
-    energy: torch.Tensor, positions: List[torch.Tensor], is_training=True
-) -> List[torch.Tensor]:
+    energy: torch.Tensor, positions: torch.Tensor, is_training: bool = True
+) -> torch.Tensor:
+    grad_outputs : Optional[List[Optional[torch.Tensor]]] = [torch.ones_like(energy)]
     gradient = torch.autograd.grad(
-        outputs=energy,
-        inputs=positions,
-        grad_outputs=torch.ones_like(energy),
+        outputs=[energy],
+        inputs=[positions],
+        grad_outputs=grad_outputs,
         retain_graph=is_training,
         create_graph=is_training,
+    )[0]
+    if gradient is None:
+        raise ValueError(
+        "Unexpected None value for computed gradient. "
+        "One or more operations inside the model might not have a gradient implementation."
     )
-    return [-single_structure_gradient for single_structure_gradient in gradient]
+    else:
+        return -gradient
 
 
 if __name__ == "__main__":

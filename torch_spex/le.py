@@ -96,6 +96,8 @@ def get_le_spliner(E_max, r_cut, normalize, device):
         ) / (delta / 10.0)
         return np.concatenate([derivative_at_zero, all_derivatives_except_at_zero])
 
+    n_max_l = [int(n_max) for n_max in n_max_l]
+
     return n_max_l, generate_splines(
         laplacian_eigenstate_basis,
         laplacian_eigenstate_basis_derivative,
