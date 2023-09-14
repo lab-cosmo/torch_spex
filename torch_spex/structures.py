@@ -1,4 +1,5 @@
 from collections import defaultdict
+from functools import singledispatch
 
 import numpy as np
 import torch
@@ -24,6 +25,33 @@ def structure_to_torch(structure : AtomicStructure,
         return positions, species, cell, pbc
     else:
         raise ValueError("Unknown atom type. We only support ase.Atoms at the moment.")
+
+@singledispatch
+def build_neighborlist(positions, cell, pbc, cutoff) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    raise ValueError("Function supports signatures\n"
+                    "  positions: numpy.ndarray, cell: numpy.ndarray, "
+                    "pbc: numpy.ndarray, cutoff: float\n"
+                    "and\n"
+                    "  positions: torch.Tensor, cell: torch.Tensor, "
+                    "pbc: torch.Tensor, cutoff: float"
+                    "but got\n"
+                    "  positions: {type(positions)!r}, cell: {type(cell)!r}, "
+                    "pbc: {type(pbc)!r}, cutoff: {type(cutoff)!r}")
+
+def build_neighborlist(positions: np.ndarray, cell: np.ndarray, pbc: np.ndarray, cutoff : float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    pairs_i, pairs_j, cell_shifts = ase.neighborlist.primitive_neighbor_list(
+        quantities="ijS",
+        positions=positions,
+        cell=cell,
+        pbc=pbc,
+        cutoff=cutoff,
+        self_interaction=False,
+        use_scaled_positions=False,
+    )
+
+    pairs = np.vstack([pairs_i, pairs_j]).T
+    centers = np.arange(len(positions))
+    return centers, pairs, cell_shifts
 
 def build_neighborlist(positions: torch.Tensor, cell: torch.Tensor, pbc: torch.Tensor, cutoff : float) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
 

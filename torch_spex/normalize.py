@@ -1,6 +1,5 @@
 import torch
-from .neighbor_list import get_neighbor_list
-
+from .structures import build_neighborlist
 
 class NormalizedActivationFunction(torch.nn.Module):
 
@@ -80,7 +79,7 @@ def get_average_number_of_neighbors(structures, r_cut):
     n_total_centers = 0
     n_total_pairs = 0
     for structure in structures:
-        centers, _, _ = get_neighbor_list(structure.positions, structure.pbc, structure.cell, r_cut)
+        centers, _, _ = build_neighborlist(structure.positions, structure.pbc, structure.cell, r_cut)
         n_total_pairs += centers.shape[0]
         n_total_centers += structure.get_atomic_numbers().shape[0]
     # remember that the total number of pairs is double-counted. This is what we're after
