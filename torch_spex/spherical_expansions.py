@@ -6,7 +6,7 @@ from metatensor.torch import TensorMap, Labels, TensorBlock
 import sphericart.torch
 
 from .radial_basis import RadialBasis
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 class SphericalExpansion(torch.nn.Module):
@@ -77,7 +77,9 @@ class SphericalExpansion(torch.nn.Module):
 
     """
 
-    def __init__(self, hypers: Dict, all_species: List[int], device: str = "cpu") -> None:
+    def __init__(self, hypers: Dict, all_species: List[int],
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.device] = None) -> None:
         super().__init__()
 
         self.hypers = hypers
@@ -90,7 +92,8 @@ class SphericalExpansion(torch.nn.Module):
             self.normalization_factor = 1.0  # dummy for torchscript
             self.normalization_factor_0 = 1.0  # dummy for torchscript
         self.all_species = all_species
-        self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species, device=device)
+        self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species,
+                device=device, dtype=dtype)
 
         if "alchemical" in self.hypers:
             self.is_alchemical = True
@@ -261,7 +264,9 @@ class VectorExpansion(torch.nn.Module):
 
     """
 
-    def __init__(self, hypers: Dict, all_species, device: str = "cpu") -> None:
+    def __init__(self, hypers: Dict, all_species,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.device] = None) -> None:
         super().__init__()
 
         self.hypers = hypers
@@ -277,7 +282,8 @@ class VectorExpansion(torch.nn.Module):
         else:
             self.n_pseudo_species = 0  # dummy for torchscript
             self.is_alchemical = False
-        self.radial_basis_calculator = RadialBasis(hypers_radial_basis, all_species, device=device)
+        self.radial_basis_calculator = RadialBasis(hypers_radial_basis, all_species,
+                device=device, dtype=dtype)
         self.l_max = self.radial_basis_calculator.l_max
         self.spherical_harmonics_calculator = sphericart.torch.SphericalHarmonics(self.l_max, normalized=True)
         self.spherical_harmonics_split_list = [(2*l+1) for l in range(self.l_max+1)]

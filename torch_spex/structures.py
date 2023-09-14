@@ -1,33 +1,64 @@
 from collections import defaultdict
+from functools import singledispatch
 
 import numpy as np
 import torch
-from typing import Dict, List, Tuple, TypeVar, Callable
+from typing import Dict, List, Tuple, TypeVar, Callable, Optional
 import ase
 
 import abc
 AtomicStructure = TypeVar('AtomicStructure')
 
-def structure_to_torch(structure : AtomicStructure, device : torch.device = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def structure_to_torch(structure : AtomicStructure,
+        device : Optional[torch.device] = None,
+        dtype: Optional[torch.dtype] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     :returns:
         Tuple of posititions, species, cell and periodic boundary conditions
     """
     if isinstance(structure, ase.Atoms):
-        # dtype is automatically referred from the type in the structure object
-        positions = torch.tensor(structure.positions, device=device, dtype=torch.get_default_dtype())
+        # dtype is automatically referred from the type in the structure object if None
+        positions = torch.tensor(structure.positions, device=device, dtype=dtype)
         species = torch.tensor(structure.numbers, device=device)
-        cell = torch.tensor(structure.cell.array, device=device, dtype=torch.get_default_dtype())
+        cell = torch.tensor(structure.cell.array, device=device, dtype=dtype)
         pbc = torch.tensor(structure.pbc, device=device)
         return positions, species, cell, pbc
     else:
         raise ValueError("Unknown atom type. We only support ase.Atoms at the moment.")
+
+@singledispatch
+def build_neighborlist(positions, cell, pbc, cutoff) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    raise ValueError("Function supports signatures\n"
+                    "  positions: numpy.ndarray, cell: numpy.ndarray, "
+                    "pbc: numpy.ndarray, cutoff: float\n"
+                    "and\n"
+                    "  positions: torch.Tensor, cell: torch.Tensor, "
+                    "pbc: torch.Tensor, cutoff: float"
+                    "but got\n"
+                    "  positions: {type(positions)!r}, cell: {type(cell)!r}, "
+                    "pbc: {type(pbc)!r}, cutoff: {type(cutoff)!r}")
+
+def build_neighborlist(positions: np.ndarray, cell: np.ndarray, pbc: np.ndarray, cutoff : float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    pairs_i, pairs_j, cell_shifts = ase.neighborlist.primitive_neighbor_list(
+        quantities="ijS",
+        positions=positions,
+        cell=cell,
+        pbc=pbc,
+        cutoff=cutoff,
+        self_interaction=False,
+        use_scaled_positions=False,
+    )
+
+    pairs = np.vstack([pairs_i, pairs_j]).T
+    centers = np.arange(len(positions))
+    return centers, pairs, cell_shifts
 
 def build_neighborlist(positions: torch.Tensor, cell: torch.Tensor, pbc: torch.Tensor, cutoff : float) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
 
     assert positions.device == cell.device
     assert positions.device == pbc.device
     device = positions.device
+
     # will be replaced with something with GPU support
     pairs_i, pairs_j, cell_shifts = ase.neighborlist.primitive_neighbor_list(
         quantities="ijS",
@@ -70,13 +101,16 @@ class TransformerNeighborList(TransformerBase):
     """
     Produces a neighbour list and with direction vectors from an AtomicStructure
     """
-    def __init__(self, cutoff: float, device=None):
+    def __init__(self, cutoff: float, device=None, dtype=None):
         self._cutoff = cutoff
         self._device = device
+        self._dtype = dtype
 
     def __call__(self, structure: AtomicStructure) -> Dict[str, torch.Tensor]:
-        positions_i, species_i, cell_i, pbc_i = structure_to_torch(structure, device=self._device)
-        centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i, pbc_i, self._cutoff)
+        positions_i, species_i, cell_i, pbc_i = structure_to_torch(structure,
+                dtype=self._dtype, device=self._device)
+        centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i,
+                pbc_i, self._cutoff)
 
         return {
             'positions': positions_i,
