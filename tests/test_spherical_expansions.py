@@ -31,6 +31,7 @@ class TestEthanol1SphericalExpansion:
 
     def test_vector_expansion_coeffs(self):
         tm_ref = metatensor.torch.load("tests/data/vector_expansion_coeffs-ethanol1_0-data.npz")
+        breakpoint()
         tm_ref = metatensor.torch.to(tm_ref, device=self.device, dtype=self.dtype)
         # we need to sort both computed and reference pair expansion coeffs,
         # because ase.neighborlist can get different neighborlist order for some reasons
