@@ -25,7 +25,7 @@ setup(
         'ase',
         'torch',
         'scipy',
-        'metatensor[torch] @ https://github.com/lab-cosmo/metatensor/archive/b17bc4d.zip',
+        'metatensor[torch] @ https://github.com/lab-cosmo/metatensor/archive/2248a3c.zip',
     ],
     dependency_links = dependency_links
 )
