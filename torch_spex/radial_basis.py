@@ -4,11 +4,13 @@ from metatensor.torch import Labels
 from .le import get_le_spliner
 from .physical_le import get_physical_le_spliner
 from .normalize import normalize_true, normalize_false
-
+from typing import Optional
 
 class RadialBasis(torch.nn.Module):
 
-    def __init__(self, hypers, all_species, device) -> None:
+    def __init__(self, hypers, all_species,
+            device:Optional[torch.device] = None,
+            dtype:Optional[torch.dtype] = None) -> None:
         super().__init__()
 
         if hypers["normalize"]:
@@ -17,9 +19,10 @@ class RadialBasis(torch.nn.Module):
             normalize = normalize_false
 
         if hypers["type"] == "le":
-            self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["normalize"], device=device)
+            self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"],
+                    hypers["r_cut"], hypers["normalize"], device=device, dtype=dtype)
         elif hypers["type"] == "physical":
-            self.n_max_l, self.spliner = get_physical_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["scale"], hypers["normalize"], hypers["cost_trade_off"], device=device)
+            self.n_max_l, self.spliner = get_physical_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["scale"], hypers["normalize"], hypers["cost_trade_off"], device=device, dtype=dtype)
         elif hypers["type"] == "custom":
             # The custom keyword here allows the user to set splines from outside.
             # After initialization of the model, the user will have to use generate_splines()
@@ -35,7 +38,9 @@ class RadialBasis(torch.nn.Module):
         if "alchemical" in hypers:
             self.is_alchemical = True
             self.n_pseudo_species = hypers["alchemical"]
-            self.combination_matrix = normalize("embedding", torch.nn.Linear(len(all_species), self.n_pseudo_species, bias=False))
+            self.combination_matrix = normalize("embedding",
+                    torch.nn.Linear(len(all_species), self.n_pseudo_species, bias=False,
+                        device=device, dtype=dtype))
             self.species_neighbor_labels = Labels(
                 names = ["species_neighbor"],
                 values = torch.tensor(self.all_species, dtype=torch.int).unsqueeze(1)
@@ -83,7 +88,8 @@ class RadialBasis(torch.nn.Module):
                 samples_metadata,
                 self.species_neighbor_labels
             )
-            pseudo_species_weights = self.combination_matrix(one_hot_aj.to(dtype=radial_functions.dtype))
+            pseudo_species_weights = \
+                    self.combination_matrix(one_hot_aj.to(device=radial_functions.device, dtype=radial_functions.dtype))
             radial_functions = radial_functions.unsqueeze(1)*pseudo_species_weights.unsqueeze(2)
             # Note: if the model is alchemical, now the radial basis has one extra dimension: the alpha_j dimension, which is in the middle
 

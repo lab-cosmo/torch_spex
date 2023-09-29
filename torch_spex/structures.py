@@ -2,22 +2,24 @@ from collections import defaultdict
 
 import numpy as np
 import torch
-from typing import Dict, List, Tuple, TypeVar, Callable
+from typing import Dict, List, Tuple, TypeVar, Callable, Optional
 import ase
 
 import abc
 AtomicStructure = TypeVar('AtomicStructure')
 
-def structure_to_torch(structure : AtomicStructure, device : torch.device = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def structure_to_torch(structure : AtomicStructure,
+        device : Optional[torch.device] = None,
+        dtype: Optional[torch.dtype] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     :returns:
         Tuple of posititions, species, cell and periodic boundary conditions
     """
     if isinstance(structure, ase.Atoms):
-        # dtype is automatically referred from the type in the structure object
-        positions = torch.tensor(structure.positions, device=device, dtype=torch.get_default_dtype())
+        # dtype is automatically referred from the type in the structure object if None
+        positions = torch.tensor(structure.positions, device=device, dtype=dtype)
         species = torch.tensor(structure.numbers, device=device)
-        cell = torch.tensor(structure.cell.array, device=device, dtype=torch.get_default_dtype())
+        cell = torch.tensor(structure.cell.array, device=device, dtype=dtype)
         pbc = torch.tensor(structure.pbc, device=device)
         return positions, species, cell, pbc
     else:
@@ -28,6 +30,7 @@ def build_neighborlist(positions: torch.Tensor, cell: torch.Tensor, pbc: torch.T
     assert positions.device == cell.device
     assert positions.device == pbc.device
     device = positions.device
+
     # will be replaced with something with GPU support
     pairs_i, pairs_j, cell_shifts = ase.neighborlist.primitive_neighbor_list(
         quantities="ijS",
@@ -70,13 +73,16 @@ class TransformerNeighborList(TransformerBase):
     """
     Produces a neighbour list and with direction vectors from an AtomicStructure
     """
-    def __init__(self, cutoff: float, device=None):
+    def __init__(self, cutoff: float, device=None, dtype=None):
         self._cutoff = cutoff
         self._device = device
+        self._dtype = dtype
 
     def __call__(self, structure: AtomicStructure) -> Dict[str, torch.Tensor]:
-        positions_i, species_i, cell_i, pbc_i = structure_to_torch(structure, device=self._device)
-        centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i, pbc_i, self._cutoff)
+        positions_i, species_i, cell_i, pbc_i = structure_to_torch(structure,
+                dtype=self._dtype, device=self._device)
+        centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i,
+                pbc_i, self._cutoff)
 
         return {
             'positions': positions_i,
