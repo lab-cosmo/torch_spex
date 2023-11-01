@@ -20,12 +20,12 @@ setup(
     name='torch_spex',
     packages = find_packages(),
     install_requires=[
-        'sphericart[torch] @ git+https://github.com/lab-cosmo/sphericart.git@ecf4145', # pre-built wheels don't work
+        'sphericart[torch] @ git+https://github.com/lab-cosmo/sphericart.git@99761b0', # pre-built wheels don't work
         'numpy',
         'ase',
         'torch',
         'scipy',
-        'metatensor[torch] @ https://github.com/lab-cosmo/metatensor/archive/b17bc4d.zip',
+        'metatensor[torch] @ https://github.com/lab-cosmo/metatensor/archive/0436e27.zip',
     ],
     dependency_links = dependency_links
 )
