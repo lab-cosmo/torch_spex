@@ -9,6 +9,8 @@ from scipy.special import spherical_in as i_l
 from scipy.integrate import quadrature
 from .le import Jn_zeros
 from .splines import generate_splines
+from typing import Optional
+import torch
 
 
 def get_laplacian_eigenvalues(n_big, l_big, cost_trade_off):
@@ -91,7 +93,9 @@ def integrate_H(l, m, n, alpha, z_nl, precomputed_N_nl):
     )[0]
 
 
-def get_physical_le_spliner(E_max, r_cut, r0, normalize, cost_trade_off, device):
+def get_physical_le_spliner(E_max, r_cut, r0, normalize, cost_trade_off,
+    device: Optional[torch.device]=None,
+    dtype: Optional[torch.dtype]=None):
 
     rs = False
     rnn = 0.0
@@ -239,11 +243,14 @@ def get_physical_le_spliner(E_max, r_cut, r0, normalize, cost_trade_off, device)
         n, l = index_to_nl(index, n_max_l)
         return function_for_splining_derivative(n, l, r)
 
+    n_max_l = [int(n_max) for n_max in n_max_l]
+
     return n_max_l, generate_splines(
         function_for_splining_index,
         function_for_splining_index_derivative,
         np.sum(n_max_l),
         r_cut,
         requested_accuracy=1e-6,
-        device=device
+        device=device,
+        dtype=dtype
     )

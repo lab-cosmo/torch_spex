@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from typing import Optional
 
 
 def generate_splines(
@@ -8,7 +9,8 @@ def generate_splines(
     max_index,
     cutoff_radius,
     requested_accuracy=1e-8,
-    device="cpu"
+    device: Optional[torch.device]=None,
+    dtype: Optional[torch.dtype]=None
 ):
     """Spline generator for tabulated radial integrals.
 
@@ -53,13 +55,13 @@ def generate_splines(
         value_evaluator_2D,
         derivative_evaluator_2D,
         requested_accuracy,
-        device=device
+        device=device,
+        dtype=dtype
     )
-
     return dynamic_spliner
 
 
-class DynamicSpliner:
+class DynamicSpliner(torch.nn.Module):
 
     def __init__(
         self,
@@ -68,8 +70,10 @@ class DynamicSpliner:
         values_fn,
         derivatives_fn,
         requested_accuracy,
-        device
+        device: Optional[torch.device]=None,
+        dtype: Optional[torch.dtype]=None,
     ) -> None:
+        super().__init__()
 
         self.start = start
         self.stop = stop
@@ -131,9 +135,9 @@ class DynamicSpliner:
             self.spline_values = concatenated_values[sort_indices]
             self.spline_derivatives = concatenated_derivatives[sort_indices]
 
-        self.spline_positions = self.spline_positions.to(device)
-        self.spline_values = self.spline_values.to(device)
-        self.spline_derivatives = self.spline_derivatives.to(device)
+        self.spline_positions = self.spline_positions.to(device=device, dtype=dtype)
+        self.spline_values = self.spline_values.to(device=device, dtype=dtype)
+        self.spline_derivatives = self.spline_derivatives.to(device=device, dtype=dtype)
 
     def compute(self, positions):
         x = positions

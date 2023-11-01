@@ -3,11 +3,10 @@ from torch_spex.structures import InMemoryDataset, TransformerNeighborList, Tran
 import torch
 from torch.utils.data import DataLoader
 
-import equistore
+import metatensor
 
 import json
 import ase.io
-import numpy as np
 
 def test_in_memory_neighbor_list():
 
@@ -23,6 +22,6 @@ def test_in_memory_neighbor_list():
     loader = DataLoader(dataset, batch_size=n_structures, collate_fn=collate_nl)
     batch = next(iter(loader))
     assert set(batch.keys()) == {'positions', 'species', 'cells', 'centers', 'pairs', 'cell_shifts', 'structure_centers', 'structure_pairs', 'structure_offsets', 'energy', 'forces'}
-    assert len(batch['species']) == len(batch['centers']) == len(batch['structure_centers']) == len(batch['forces'])
-    assert len(batch['positions']) == len(batch['cells']) == n_structures == len(batch['energy']) == len(batch['structure_offsets'])
+    assert len(batch['species']) == len(batch['centers']) == len(batch['structure_centers']) == len(batch['forces']) == len(batch['positions'])
+    assert len(batch['cells']) == n_structures == len(batch['energy']) == len(batch['structure_offsets'])
     assert len(batch['pairs']) == len(batch['cell_shifts']) == len(batch['structure_pairs'])

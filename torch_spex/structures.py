@@ -2,23 +2,24 @@ from collections import defaultdict
 
 import numpy as np
 import torch
-from typing import Dict, List, Tuple, TypeVar, Callable
+from typing import Dict, List, Tuple, TypeVar, Callable, Optional
 import ase
-from .neighbor_list import get_neighbor_list
 
 import abc
 AtomicStructure = TypeVar('AtomicStructure')
 
-def structure_to_torch(structure : AtomicStructure, device : torch.device = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def structure_to_torch(structure : AtomicStructure,
+        device : Optional[torch.device] = None,
+        dtype: Optional[torch.dtype] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     :returns:
         Tuple of posititions, species, cell and periodic boundary conditions
     """
     if isinstance(structure, ase.Atoms):
-        # dtype is automatically referred from the type in the structure object
-        positions = torch.tensor(structure.positions, device=device, dtype=torch.get_default_dtype())
+        # dtype is automatically referred from the type in the structure object if None
+        positions = torch.tensor(structure.positions, device=device, dtype=dtype)
         species = torch.tensor(structure.numbers, device=device)
-        cell = torch.tensor(structure.cell.array, device=device, dtype=torch.get_default_dtype())
+        cell = torch.tensor(structure.cell.array, device=device, dtype=dtype)
         pbc = torch.tensor(structure.pbc, device=device)
         return positions, species, cell, pbc
     else:
@@ -29,6 +30,7 @@ def build_neighborlist(positions: torch.Tensor, cell: torch.Tensor, pbc: torch.T
     assert positions.device == cell.device
     assert positions.device == pbc.device
     device = positions.device
+
     # will be replaced with something with GPU support
     pairs_i, pairs_j, cell_shifts = ase.neighborlist.primitive_neighbor_list(
         quantities="ijS",
@@ -44,7 +46,7 @@ def build_neighborlist(positions: torch.Tensor, cell: torch.Tensor, pbc: torch.T
     cell_shifts = torch.tensor(cell_shifts, device=device)
 
     pairs = torch.vstack([pairs_i, pairs_j]).T
-    centers = torch.arange(len(positions))
+    centers = torch.arange(len(positions), device=device)
     return centers, pairs, cell_shifts
 
 
@@ -71,13 +73,16 @@ class TransformerNeighborList(TransformerBase):
     """
     Produces a neighbour list and with direction vectors from an AtomicStructure
     """
-    def __init__(self, cutoff: float, device=None):
+    def __init__(self, cutoff: float, device=None, dtype=None):
         self._cutoff = cutoff
         self._device = device
+        self._dtype = dtype
 
     def __call__(self, structure: AtomicStructure) -> Dict[str, torch.Tensor]:
-        positions_i, species_i, cell_i, pbc_i = structure_to_torch(structure, device=self._device)
-        centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i, pbc_i, self._cutoff)
+        positions_i, species_i, cell_i, pbc_i = structure_to_torch(structure,
+                dtype=self._dtype, device=self._device)
+        centers_i, pairs_ij, cell_shifts_ij = build_neighborlist(positions_i, cell_i,
+                pbc_i, self._cutoff)
 
         return {
             'positions': positions_i,
@@ -88,7 +93,7 @@ class TransformerNeighborList(TransformerBase):
             'cell_shifts': cell_shifts_ij
         }
 
-# Temporary Dataset until we have an equistore Dataset
+# Temporary Dataset until we have an metatensor Dataset
 class InMemoryDataset(torch.utils.data.Dataset):
     def __init__(self,
                  structures : List[AtomicStructure],
@@ -111,16 +116,16 @@ class InMemoryDataset(torch.utils.data.Dataset):
 def collate_nl(data_list):
 
     collated = {key: torch.concatenate([data[key] for data in data_list], dim=0) for key in filter(lambda x : x not in ["positions", "cell"], data_list[0].keys())}
-    collated['positions'] = [data["positions"] for data in data_list]
-    collated['cells'] = [data["cell"] for data in data_list]
+    collated['positions'] = torch.concatenate([data["positions"] for data in data_list])
+    collated['cells'] = torch.stack([data["cell"] for data in data_list])
     collated['structure_centers'] = torch.concatenate(
-        [torch.tensor([structure_index] * len(data_list[structure_index]["centers"]), device=collated["positions"][0].device) for structure_index in range(len(data_list))]
+        [torch.tensor([structure_index] * len(data_list[structure_index]["centers"]), device=collated["positions"].device) for structure_index in range(len(data_list))]
     )
     collated['structure_pairs'] = torch.concatenate(
-        [torch.tensor([structure_index] * len(data_list[structure_index]["pairs"]), device=collated["positions"][0].device) for structure_index in range(len(data_list))]
+        [torch.tensor([structure_index] * len(data_list[structure_index]["pairs"]), device=collated["positions"].device) for structure_index in range(len(data_list))]
     )
     collated['structure_offsets'] = torch.tensor(
-        np.cumsum([0] + [structure_positions.shape[0] for structure_positions in collated["positions"][:-1]]),
+        np.cumsum([0] + [structure_data["positions"].shape[0] for structure_data in data_list[:-1]]),
         device=collated["positions"][0].device,
         dtype=torch.long
     )

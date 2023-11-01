@@ -6,6 +6,8 @@ from scipy.special import spherical_jn as j_l
 from scipy import integrate
 from .splines import generate_splines
 import copy
+import torch
+from typing import Optional
 
 
 def Jn(r, n):
@@ -24,7 +26,7 @@ def Jn_zeros(n, nt):
     return zeros_j
 
 
-def get_le_spliner(E_max, r_cut, normalize, device):
+def get_le_spliner(E_max, r_cut, normalize, device: Optional[torch.device]=None, dtype: Optional[torch.dtype]=None):
 
     l_big = 50
     n_big = 50
@@ -96,12 +98,15 @@ def get_le_spliner(E_max, r_cut, normalize, device):
         ) / (delta / 10.0)
         return np.concatenate([derivative_at_zero, all_derivatives_except_at_zero])
 
+    n_max_l = [int(n_max) for n_max in n_max_l]
+
     return n_max_l, generate_splines(
         laplacian_eigenstate_basis,
         laplacian_eigenstate_basis_derivative,
         np.sum(n_max_l),
         r_cut,
         requested_accuracy=1e-6,
-        device=device
+        device=device,
+        dtype=dtype
     )
 

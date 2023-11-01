@@ -1,15 +1,16 @@
 import torch
-from typing import List
 
-class AtomicComposition:
 
-    def __init__(self, all_species):
+class AtomicComposition(torch.nn.Module):
+
+    def __init__(self, all_species) -> None:
+        super().__init__()
         self.all_species = all_species
 
-    def compute(
+    def forward(
         self,
-        positions: List[torch.Tensor],
-        cells: List[torch.Tensor],
+        positions: torch.Tensor,
+        cells: torch.Tensor,
         species: torch.Tensor,
         cell_shifts: torch.Tensor,
         centers: torch.Tensor,
@@ -17,9 +18,9 @@ class AtomicComposition:
         structure_centers: torch.Tensor,
         structure_pairs: torch.Tensor,
         structure_offsets: torch.Tensor
-    ):
-        n_structures = len(positions)
-        composition_features = torch.zeros((n_structures, len(self.all_species)), dtype=torch.get_default_dtype(), device=positions[0].device)
+    ) -> torch.Tensor:
+        n_structures = cells.shape[0]
+        composition_features = torch.zeros((n_structures, len(self.all_species)), dtype=positions.dtype, device=positions.device)
         for i_structure in range(n_structures):
             if i_structure == n_structures-1:
                 species_structure = species[structure_offsets[i_structure]:] 
