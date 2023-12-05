@@ -229,7 +229,7 @@ class SphericalExpansion(torch.nn.Module):
         spherical_expansion = TensorMap(
             keys = Labels(
                 names = ["a_i", "lam", "sigma"],
-                values = torch.tensor(labels, dtype=torch.int32)
+                values = torch.tensor(labels, dtype=torch.int32, device=species.device)
             ),
             blocks = blocks
         )
