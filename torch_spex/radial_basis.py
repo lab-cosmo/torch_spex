@@ -2,7 +2,7 @@ import torch
 import metatensor.torch
 from metatensor.torch import Labels
 from .le import get_le_spliner
-from .physical_le import get_physical_le_spliner
+from .physical_LE import get_physical_le_spliner
 from .normalize import normalize_true, normalize_false
 from typing import Optional
 
@@ -13,16 +13,26 @@ class RadialBasis(torch.nn.Module):
             dtype:Optional[torch.dtype] = None) -> None:
         super().__init__()
 
+        # Only for the physical basis, but initialized for all branches
+        # due to torchscript complaints
+        lengthscales = torch.zeros((max(all_species)+1))
+        for species in all_species:
+            lengthscales[species] = 0.0
+        self.lengthscales = torch.nn.Parameter(lengthscales)
+
         if hypers["normalize"]:
             normalize = normalize_true
         else:
             normalize = normalize_false
 
+        self.is_physical = False
+
         if hypers["type"] == "le":
             self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"],
                     hypers["r_cut"], hypers["normalize"], device=device, dtype=dtype)
         elif hypers["type"] == "physical":
-            self.n_max_l, self.spliner = get_physical_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["scale"], hypers["normalize"], hypers["cost_trade_off"], device=device, dtype=dtype)
+            self.n_max_l, self.spliner = get_physical_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["normalize"], device=device, dtype=dtype)
+            self.is_physical = True
         elif hypers["type"] == "custom":
             # The custom keyword here allows the user to set splines from outside.
             # After initialization of the model, the user will have to use generate_splines()
@@ -74,13 +84,27 @@ class RadialBasis(torch.nn.Module):
         
         self.split_dimension = 2 if self.is_alchemical else 1
 
-    def radial_transform(self, r):
-        return r
+    def radial_transform(self, r, samples_metadata: Labels):
+        if self.is_physical:
+            a_i = samples_metadata.column("species_center")
+            a_j = samples_metadata.column("species_neighbor")
+            x = r/(0.1+torch.exp(self.lengthscales[a_i])+torch.exp(self.lengthscales[a_j]))
+            return x
+        else:
+            return r
 
     def forward(self, r, samples_metadata: Labels):
 
-        x = self.radial_transform(r)
-        radial_functions = self.spliner.compute(x)
+        x = self.radial_transform(r, samples_metadata)
+        if self.is_physical:
+            radial_functions = torch.where(
+                x.unsqueeze(1) < 10.0,
+                self.spliner.compute(x),
+                0.0
+            )
+        else:
+            radial_functions = self.spliner.compute(x)
+
 
         if self.is_alchemical:
             self.species_neighbor_labels.to(samples_metadata.values.device)  # Move device if needed

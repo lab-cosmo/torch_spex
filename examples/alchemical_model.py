@@ -7,6 +7,7 @@ from torch_spex.spherical_expansions import SphericalExpansion
 from torch_spex.atomic_composition import AtomicComposition
 from power_spectrum import PowerSpectrum
 from torch_spex.normalize import get_average_number_of_neighbors, normalize_true, normalize_false
+from torch_spex.normalize import get_2_mom
 
 from typing import Dict
 from metatensor.torch import TensorMap
@@ -85,7 +86,7 @@ hypers = {
         "mlp": True,
         "type": "physical",
         "scale": 3.0,
-        "E_max": 500,
+        "E_max": 350,
         "normalize": True,
         "cost_trade_off": False
     }
@@ -112,6 +113,7 @@ class Model(torch.nn.Module):
         self.all_species = all_species
         self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species, device=device)
         n_max = self.spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.n_max_l
+        print("Radial basis:", n_max)
         l_max = len(n_max) - 1
         n_feat = sum([n_max[l]**2 * n_pseudo**2 for l in range(l_max+1)])
         self.ps_calculator = PowerSpectrum(l_max, all_species)
@@ -162,7 +164,12 @@ class Model(torch.nn.Module):
             structure_pairs = structure_batch["structure_pairs"],
             structure_offsets = structure_batch["structure_offsets"]
         )
+        # for key, block in spherical_expansion.items():
+        #     print("After spex", key.values, torch.mean(block.values).item(), get_2_mom(block.values).item())
+
         ps = self.ps_calculator(spherical_expansion)
+        # for key, block in ps.items():
+        #     print("After PS", key.values, torch.mean(block.values).item(), get_2_mom(block.values).item())
 
         # print("Calculating energies")
         atomic_energies = []
