@@ -63,7 +63,10 @@ def get_physical_le_spliner(E_max, r_cut, normalize, device, dtype):
             ret += (eigenvectors[l][m, n]*c(m, x) if l%2 == 0 else eigenvectors[l][m, n]*s(m, x))
         if normalize:
             # normalize by square root of sphere volume, excluding sqrt(4pi) which is included in the SH
-            ret *= np.sqrt( (1/3)*r_cut**3 )
+            ret *= (
+                np.sqrt( (1/3)*r_cut**3 )  # formally correct value
+                * 0.45  # hardcoded empirical correction factor, TODO: automate
+            )
         return ret
 
     def function_for_splining_derivative(n, l, x):
@@ -72,7 +75,10 @@ def get_physical_le_spliner(E_max, r_cut, normalize, device, dtype):
             ret += (eigenvectors[l][m, n]*dc(m, x) if l%2 == 0 else eigenvectors[l][m, n]*ds(m, x))
         if normalize:
             # normalize by square root of sphere volume, excluding sqrt(4pi) which is included in the SH
-            ret *= np.sqrt( (1/3)*r_cut**3 )
+            ret *= (
+                np.sqrt( (1/3)*r_cut**3 )  # formally correct value
+                * 0.45  # hardcoded empirical correction factor, TODO: automate
+            )
         return ret
 
     """
