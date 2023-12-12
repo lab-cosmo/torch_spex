@@ -4,7 +4,6 @@ import math
 import torch
 from metatensor.torch import TensorMap, Labels, TensorBlock
 import sphericart.torch
-from .normalize import get_2_mom
 
 from .radial_basis import RadialBasis
 from typing import Dict, List, Optional
@@ -202,10 +201,8 @@ class SphericalExpansion(torch.nn.Module):
                     if l == 0:
                         # Very high correlations for l = 0: use a stronger normalization
                         densities_ai_l *= self.normalization_factor_0
-                        densities_ai_l *= 0.3
                     else:
                         densities_ai_l *= self.normalization_factor
-                        densities_ai_l *= 0.3
                 labels.append([a_i, l, 1])
                 blocks.append(
                     TensorBlock(

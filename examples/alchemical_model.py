@@ -164,12 +164,7 @@ class Model(torch.nn.Module):
             structure_pairs = structure_batch["structure_pairs"],
             structure_offsets = structure_batch["structure_offsets"]
         )
-        # for key, block in spherical_expansion.items():
-        #     print("After spex", key.values, torch.mean(block.values).item(), get_2_mom(block.values).item())
-
         ps = self.ps_calculator(spherical_expansion)
-        # for key, block in ps.items():
-        #     print("After PS", key.values, torch.mean(block.values).item(), get_2_mom(block.values).item())
 
         # print("Calculating energies")
         atomic_energies = []
