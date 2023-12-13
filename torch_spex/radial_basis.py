@@ -22,7 +22,7 @@ class RadialBasis(torch.nn.Module):
         lengthscales = torch.zeros((max(all_species) + 1))
         for species in all_species:
             lengthscales[species] = 0.0
-        self.lengthscales = torch.nn.Parameter(lengthscales, device=device, dtype=dtype)
+        self.lengthscales = torch.nn.Parameter(lengthscales)
 
         if hypers["normalize"]:
             normalize = normalize_true
