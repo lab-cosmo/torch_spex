@@ -66,7 +66,7 @@ class SphericalExpansion(torch.nn.Module):
     >>> dataset = InMemoryDataset([h2o], transformers)
     >>> loader = DataLoader(dataset, batch_size=1, collate_fn=collate_nl)
     >>> batch = next(iter(loader))
-    >>> spherical_expansion = SphericalExpansion(hypers, [1, 8], device="cpu").to(torch.float64) #why?BUG
+    >>> spherical_expansion = SphericalExpansion(hypers, [1, 8])
     >>> expansion = spherical_expansion.forward(**batch)
     >>> print(expansion.keys)
     Labels(
@@ -77,9 +77,7 @@ class SphericalExpansion(torch.nn.Module):
 
     """
 
-    def __init__(self, hypers: Dict, all_species: List[int],
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.device] = None) -> None:
+    def __init__(self, hypers: Dict, all_species: List[int]) -> None:
         super().__init__()
 
         self.hypers = hypers
@@ -92,8 +90,7 @@ class SphericalExpansion(torch.nn.Module):
             self.normalization_factor = 1.0  # dummy for torchscript
             self.normalization_factor_0 = 1.0  # dummy for torchscript
         self.all_species = all_species
-        self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species,
-                device=device, dtype=dtype)
+        self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species)
 
         if "alchemical" in self.hypers:
             self.is_alchemical = True
@@ -165,7 +162,7 @@ class SphericalExpansion(torch.nn.Module):
                     dtype = expanded_vectors_l.dtype,
                     device = expanded_vectors_l.device
                 )
-                densities_l.index_add_(dim=0, index=density_indices.to(expanded_vectors_l.device), source=expanded_vectors_l)
+                densities_l.index_add_(dim=0, index=density_indices, source=expanded_vectors_l)
                 densities_l = densities_l.reshape((n_centers, 2*l+1, -1))
                 densities.append(densities_l)
             unique_species = -torch.arange(self.n_pseudo_species, dtype=torch.int64, device=density_indices.device)
@@ -181,7 +178,7 @@ class SphericalExpansion(torch.nn.Module):
                     dtype = expanded_vectors_l.dtype,
                     device = expanded_vectors_l.device
                 )
-                densities_l.index_add_(dim=0, index=density_indices.to(expanded_vectors_l.device), source=expanded_vectors_l)
+                densities_l.index_add_(dim=0, index=density_indices, source=expanded_vectors_l)
                 densities_l = densities_l.reshape((n_centers, n_species, 2*l+1, -1)).swapaxes(1, 2).reshape((n_centers, 2*l+1, -1))  # need to swap n, a indices which are in the wrong order
                 densities.append(densities_l)
             unique_species = torch.tensor(self.all_species, dtype=torch.int, device=species.device)
@@ -264,9 +261,7 @@ class VectorExpansion(torch.nn.Module):
 
     """
 
-    def __init__(self, hypers: Dict, all_species,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.device] = None) -> None:
+    def __init__(self, hypers: Dict, all_species) -> None:
         super().__init__()
 
         self.hypers = hypers
@@ -282,8 +277,7 @@ class VectorExpansion(torch.nn.Module):
         else:
             self.n_pseudo_species = 0  # dummy for torchscript
             self.is_alchemical = False
-        self.radial_basis_calculator = RadialBasis(hypers_radial_basis, all_species,
-                device=device, dtype=dtype)
+        self.radial_basis_calculator = RadialBasis(hypers_radial_basis, all_species)
         self.l_max = self.radial_basis_calculator.l_max
         self.spherical_harmonics_calculator = sphericart.torch.SphericalHarmonics(self.l_max, normalized=True)
         self.spherical_harmonics_split_list = [(2*l+1) for l in range(self.l_max+1)]
@@ -369,9 +363,9 @@ class VectorExpansion(torch.nn.Module):
                     samples = cartesian_vectors.samples,
                     components = [Labels(
                         names = ("m",),
-                        values = torch.arange(start=-l, end=l+1, dtype=torch.int32).reshape(2*l+1, 1)
+                        values = torch.arange(start=-l, end=l+1, dtype=torch.int32, device=vector_expansion_l.device).reshape(2*l+1, 1)
                     )],
-                    properties = properties
+                    properties = properties.to(vector_expansion_l.device)
                 )
             )
 
@@ -379,7 +373,7 @@ class VectorExpansion(torch.nn.Module):
         vector_expansion_tmap = TensorMap(
             keys = Labels(
                 names = ("l",),
-                values = torch.arange(start=0, end=l_max+1, dtype=torch.int32).reshape(l_max+1, 1),
+                values = torch.arange(start=0, end=l_max+1, dtype=torch.int32, device=vector_expansion_blocks[0].values.device).reshape(l_max+1, 1),
             ),
             blocks = vector_expansion_blocks
         )
@@ -423,10 +417,10 @@ def get_cartesian_vectors(positions, cells, species, cell_shifts, centers, pairs
         components = [
             Labels(
                 names = ["cartesian_dimension"],
-                values = torch.tensor([-1, 0, 1], dtype=torch.int32).reshape((-1, 1))
+                values = torch.tensor([-1, 0, 1], dtype=torch.int32, device=direction_vectors.device).reshape((-1, 1))
             )
         ],
-        properties = Labels.single()
+        properties = Labels.single().to(direction_vectors.device)
     )
 
     return block

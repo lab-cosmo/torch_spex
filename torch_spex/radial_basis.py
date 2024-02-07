@@ -8,9 +8,7 @@ from typing import Optional
 
 class RadialBasis(torch.nn.Module):
 
-    def __init__(self, hypers, all_species,
-            device:Optional[torch.device] = None,
-            dtype:Optional[torch.dtype] = None) -> None:
+    def __init__(self, hypers, all_species) -> None:
         super().__init__()
 
         # Only for the physical basis, but initialized for all branches
@@ -28,10 +26,9 @@ class RadialBasis(torch.nn.Module):
         self.is_physical = False
 
         if hypers["type"] == "le":
-            self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"],
-                    hypers["r_cut"], hypers["normalize"], device=device, dtype=dtype)
+            self.n_max_l, self.spliner = get_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["normalize"])
         elif hypers["type"] == "physical":
-            self.n_max_l, self.spliner = get_physical_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["normalize"], device=device, dtype=dtype)
+            self.n_max_l, self.spliner = get_physical_le_spliner(hypers["E_max"], hypers["r_cut"], hypers["normalize"])
             self.is_physical = True
         elif hypers["type"] == "custom":
             # The custom keyword here allows the user to set splines from outside.
@@ -49,8 +46,8 @@ class RadialBasis(torch.nn.Module):
             self.is_alchemical = True
             self.n_pseudo_species = hypers["alchemical"]
             self.combination_matrix = normalize("embedding",
-                    torch.nn.Linear(len(all_species), self.n_pseudo_species, bias=False,
-                        device=device, dtype=dtype))
+                    torch.nn.Linear(len(all_species), self.n_pseudo_species, bias=False)
+            )
             self.species_neighbor_labels = Labels(
                 names = ["species_neighbor"],
                 values = torch.tensor(self.all_species, dtype=torch.int).unsqueeze(1)

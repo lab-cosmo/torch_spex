@@ -15,8 +15,8 @@ def structure_to_torch(structure : AtomicStructure,
     :returns:
         Tuple of posititions, species, cell and periodic boundary conditions
     """
+    if dtype is None: dtype = torch.get_default_dtype()
     if isinstance(structure, ase.Atoms):
-        # dtype is automatically referred from the type in the structure object if None
         positions = torch.tensor(structure.positions, device=device, dtype=dtype)
         species = torch.tensor(structure.numbers, device=device)
         cell = torch.tensor(structure.cell.array, device=device, dtype=dtype)

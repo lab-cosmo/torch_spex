@@ -3,7 +3,6 @@ import json
 import torch
 
 import metatensor.torch
-from metatensor.torch import Labels, TensorBlock, TensorMap
 import ase.io
 
 from torch_spex.spherical_expansions import VectorExpansion, SphericalExpansion
@@ -36,8 +35,7 @@ class TestEthanol1SphericalExpansion:
         # we need to sort both computed and reference pair expansion coeffs,
         # because ase.neighborlist can get different neighborlist order for some reasons
         tm_ref = metatensor.torch.sort(tm_ref)
-        vector_expansion = VectorExpansion(self.hypers, self.all_species,
-                device=self.device, dtype=self.dtype)
+        vector_expansion = VectorExpansion(self.hypers, self.all_species).to(self.device, self.dtype)
         with torch.no_grad():
             tm = metatensor.torch.sort(vector_expansion.forward(**self.batch))
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
@@ -54,8 +52,7 @@ class TestEthanol1SphericalExpansion:
     def test_spherical_expansion_coeffs(self):
         tm_ref = metatensor.torch.load("tests/data/spherical_expansion_coeffs-ethanol1_0-data.npz")
         tm_ref = metatensor.torch.to(tm_ref, device=self.device, dtype=self.dtype)
-        spherical_expansion_calculator = SphericalExpansion(self.hypers,
-                self.all_species, device=self.device, dtype=self.dtype)
+        spherical_expansion_calculator = SphericalExpansion(self.hypers, self.all_species).to(self.device, self.dtype)
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(**self.batch)
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
@@ -75,8 +72,7 @@ class TestEthanol1SphericalExpansion:
         tm_ref = metatensor.torch.load("tests/data/spherical_expansion_coeffs-ethanol1_0-alchemical-seed0-data.npz")
         tm_ref = metatensor.torch.to(tm_ref, device=self.device, dtype=self.dtype)
         torch.manual_seed(0)
-        spherical_expansion_calculator = SphericalExpansion(hypers, self.all_species,
-                device=self.device, dtype=self.dtype)
+        spherical_expansion_calculator = SphericalExpansion(hypers, self.all_species).to(self.device, self.dtype)
         # Because setting seed seems not be enough to get the same initial combination matrix
         # as in the reference values, we set the combination matrix manually
         with torch.no_grad():
@@ -117,8 +113,7 @@ class TestArtificialSphericalExpansion:
         tm_ref = metatensor.torch.load("tests/data/vector_expansion_coeffs-artificial-data.npz")
         tm_ref = metatensor.torch.to(tm_ref, device=self.device, dtype=self.dtype)
         tm_ref = metatensor.torch.sort(tm_ref)
-        vector_expansion = VectorExpansion(self.hypers, self.all_species,
-                device=self.device, dtype=self.dtype)
+        vector_expansion = VectorExpansion(self.hypers, self.all_species).to(self.device, self.dtype)
         with torch.no_grad():
             tm = metatensor.torch.sort(vector_expansion.forward(**self.batch))
         assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
@@ -126,8 +121,7 @@ class TestArtificialSphericalExpansion:
     def test_spherical_expansion_coeffs(self):
         tm_ref = metatensor.torch.load("tests/data/spherical_expansion_coeffs-artificial-data.npz")
         tm_ref = metatensor.torch.to(tm_ref, device=self.device, dtype=self.dtype)
-        spherical_expansion_calculator = SphericalExpansion(self.hypers,
-                self.all_species, device=self.device, dtype=self.dtype)
+        spherical_expansion_calculator = SphericalExpansion(self.hypers, self.all_species).to(self.device, self.dtype)
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(**self.batch)
         # The absolute accuracy is a bit smaller than in the ethanol case
@@ -139,8 +133,7 @@ class TestArtificialSphericalExpansion:
             hypers = json.load(f)
         tm_ref = metatensor.torch.load("tests/data/spherical_expansion_coeffs-artificial-alchemical-seed0-data.npz")
         tm_ref = metatensor.torch.to(tm_ref, device=self.device, dtype=self.dtype)
-        spherical_expansion_calculator = SphericalExpansion(hypers, self.all_species,
-                device=self.device, dtype=self.dtype)
+        spherical_expansion_calculator = SphericalExpansion(hypers, self.all_species).to(self.device, self.dtype)
         with torch.no_grad():
             spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.combination_matrix.weight.copy_(
                 torch.tensor(

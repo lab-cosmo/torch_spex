@@ -26,7 +26,7 @@ def Jn_zeros(n, nt):
     return zeros_j
 
 
-def get_le_spliner(E_max, r_cut, normalize, device: Optional[torch.device]=None, dtype: Optional[torch.dtype]=None):
+def get_le_spliner(E_max, r_cut, normalize):
 
     l_big = 50
     n_big = 50
@@ -106,7 +106,5 @@ def get_le_spliner(E_max, r_cut, normalize, device: Optional[torch.device]=None,
         np.sum(n_max_l),
         r_cut,
         requested_accuracy=1e-6,
-        device=device,
-        dtype=dtype
     )
 
