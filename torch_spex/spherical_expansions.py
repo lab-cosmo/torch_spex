@@ -62,12 +62,12 @@ class SphericalExpansion(torch.nn.Module):
     ...     "alchemical": 1,
     ... }
     >>> h2o = molecule("H2O")
-    >>> transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"])]
+    >>> transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"], dtype=torch.float32)]
     >>> dataset = InMemoryDataset([h2o], transformers)
     >>> loader = DataLoader(dataset, batch_size=1, collate_fn=collate_nl)
     >>> batch = next(iter(loader))
     >>> spherical_expansion = SphericalExpansion(hypers, [1, 8])
-    >>> expansion = spherical_expansion.forward(**batch)
+    >>> expansion = spherical_expansion(**batch)
     >>> print(expansion.keys)
     Labels(
         a_i  lam  sigma
