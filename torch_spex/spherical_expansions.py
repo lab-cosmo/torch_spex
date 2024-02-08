@@ -62,7 +62,7 @@ class SphericalExpansion(torch.nn.Module):
     ...     "alchemical": 1,
     ... }
     >>> h2o = molecule("H2O")
-    >>> transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"], dtype=torch.float32)]
+    >>> transformers = [TransformerNeighborList(cutoff=hypers["cutoff radius"])]
     >>> dataset = InMemoryDataset([h2o], transformers)
     >>> loader = DataLoader(dataset, batch_size=1, collate_fn=collate_nl)
     >>> batch = next(iter(loader))
@@ -425,7 +425,7 @@ def get_cartesian_vectors(positions, cells, species, cell_shifts, centers, pairs
         ],
         properties = Labels(
             names=["_"],
-            values=torch.zeros((1, 1), device=direction_vectors.device)
+            values=torch.zeros((1, 1), dtype=torch.int, device=direction_vectors.device)
         )
     )
 
