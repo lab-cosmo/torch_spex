@@ -35,7 +35,10 @@ class PowerSpectrum(torch.nn.Module):
                 values=ps_values_ai,
                 samples=spex.block({"lam": 0, "a_i": a_i}).samples,
                 components=[],
-                properties=Labels.range("property", ps_values_ai.shape[-1])
+                properties=Labels(
+                    "property",
+                    torch.arange(ps_values_ai.shape[-1], device=ps_values_ai.device).reshape(-1, 1)
+                )
             )
             keys.append([a_i])
             blocks.append(block)

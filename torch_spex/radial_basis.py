@@ -56,7 +56,10 @@ class RadialBasis(torch.nn.Module):
             self.is_alchemical = False
             self.n_pseudo_species = 0  # dummy for torchscript
             self.combination_matrix = torch.nn.Linear(1, 1)  # dummy for torchscript
-            self.species_neighbor_labels = Labels.empty("dummy")
+            self.species_neighbor_labels = Labels(
+                names=["dummy"],
+                values=torch.empty((0, 1), dtype=torch.int)
+            )
         
         self.apply_mlp = False
         if hypers["mlp"]:
