@@ -358,7 +358,7 @@ class VectorExpansion(torch.nn.Module):
             else:
                 properties = Labels(
                     names=["n"],
-                    values = torch.range(n_max_l, device=vector_expansion_l.device).reshape(n_max_l, 1)
+                    values = torch.arange(n_max_l, device=vector_expansion_l.device).reshape(n_max_l, 1)
                 )
             vector_expansion_blocks.append(
                 TensorBlock(

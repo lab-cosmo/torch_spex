@@ -37,7 +37,7 @@ class PowerSpectrum(torch.nn.Module):
                 components=[],
                 properties=Labels(
                     "property",
-                    torch.range(ps_values_ai.shape[-1], device=ps_values_ai.device).reshape(-1, 1)
+                    torch.arange(ps_values_ai.shape[-1], device=ps_values_ai.device).reshape(-1, 1)
                 )
             )
             keys.append([a_i])
