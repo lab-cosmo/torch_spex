@@ -126,6 +126,10 @@ class DynamicSpliner(torch.nn.Module):
             self.spline_values = concatenated_values[sort_indices]
             self.spline_derivatives = concatenated_derivatives[sort_indices]
 
+        self.spline_positions = self.spline_positions.to(torch.get_default_dtype())
+        self.spline_values = self.spline_values.to(torch.get_default_dtype())
+        self.spline_derivatives = self.spline_derivatives.to(torch.get_default_dtype())
+
     def compute(self, positions):
         x = positions
         delta_x = self.spline_positions[1] - self.spline_positions[0]
