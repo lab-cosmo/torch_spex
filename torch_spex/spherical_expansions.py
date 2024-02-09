@@ -232,6 +232,13 @@ class SphericalExpansion(torch.nn.Module):
         )
 
         return spherical_expansion
+    
+    def set_avg_num_neighbors(self, avg_num_neighbors: float) -> None:
+        """
+        Set the average number of neighbors for normalization
+        """
+        self.normalization_factor = 1.0/math.sqrt(avg_num_neighbors)
+        self.normalization_factor_0 = 1.0/avg_num_neighbors**(3/4)
 
 
 class VectorExpansion(torch.nn.Module):
