@@ -114,7 +114,6 @@ def get_physical_le_spliner(E_max, r_cut, normalize):
         function_for_splining_index_derivative,
         np.sum(n_max_l),
         a,
-        requested_accuracy=1e-6,
     )
     print("Number of spline points:", len(spliner.spline_positions))
 

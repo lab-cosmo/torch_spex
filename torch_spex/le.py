@@ -105,6 +105,5 @@ def get_le_spliner(E_max, r_cut, normalize):
         laplacian_eigenstate_basis_derivative,
         np.sum(n_max_l),
         r_cut,
-        requested_accuracy=1e-6,
     )
 

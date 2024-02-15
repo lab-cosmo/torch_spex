@@ -72,8 +72,9 @@ class DynamicSpliner(torch.nn.Module):
         self.start = start
         self.stop = stop
 
-        # initialize spline with 11 points
-        positions = torch.linspace(start, stop, 11)
+        # initialize spline with 11 points; the spline calculation
+        # is performed in double precision
+        positions = torch.linspace(start, stop, 11, dtype=torch.float64)
         self.register_buffer("spline_positions", positions)
         self.register_buffer("spline_values", values_fn(positions))
         self.register_buffer("spline_derivatives", derivatives_fn(positions))
@@ -91,7 +92,10 @@ class DynamicSpliner(torch.nn.Module):
 
             half_step = (self.spline_positions[1] - self.spline_positions[0]) / 2
             intermediate_positions = torch.linspace(
-                self.start + half_step, self.stop - half_step, n_intermediate_positions
+                self.start + half_step,
+                self.stop - half_step,
+                n_intermediate_positions,
+                dtype=torch.float64,
             )
 
             estimated_values = self.compute(intermediate_positions)
