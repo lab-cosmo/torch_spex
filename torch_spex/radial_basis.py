@@ -134,7 +134,7 @@ class RadialBasis(torch.nn.Module):
                     split_l_aj = l_aj.split("_")
                     l = int(split_l_aj[0])
                     aj = int(split_l_aj[1])
-                    where_aj = torch.nonzero(neighbor_species == aj)[0]
+                    where_aj = torch.nonzero(neighbor_species == aj)[:, 0]
                     radial_basis_after_mlp[l][where_aj, :] = radial_mlp_l_aj(torch.index_select(radial_basis[l], 0, where_aj))
             return radial_basis_after_mlp
         else:
