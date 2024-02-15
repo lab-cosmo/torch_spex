@@ -24,7 +24,7 @@ setup(
         '': ['*.npy'],
     },
     install_requires=[
-        "sphericart[torch] @ git+https://github.com/lab-cosmo/sphericart.git@ecf4145",  # pre-built wheels don't work
+        "sphericart[torch] @ git+https://github.com/lab-cosmo/sphericart.git",  # pre-built wheels don't work
         "numpy",
         "ase",
         "torch",
