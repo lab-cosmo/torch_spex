@@ -71,8 +71,8 @@ class SphericalExpansion(torch.nn.Module):
     >>> print(expansion.keys)
     Labels(
         center_type  o3_lambda  o3_sigma
-         1    0     1
-         8    0     1
+             1           0         1
+             8           0         1
     )
 
     """
