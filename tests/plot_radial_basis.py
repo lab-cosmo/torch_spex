@@ -39,7 +39,7 @@ hypers_spherical_expansion = {
 calculator = SphericalExpansion(hypers_spherical_expansion, [1, 6])
 spherical_expansion_coefficients = calculator(**structures)
 
-block_C_0 = spherical_expansion_coefficients.block(a_i = 6, lam = 0)
+block_C_0 = spherical_expansion_coefficients.block(center_type = 6, o3_lambda = 0)
 print("Block shape is", block_C_0.values.shape)
 
 block_C_0_0 = block_C_0.values[:, :, 2].flatten().detach().numpy()

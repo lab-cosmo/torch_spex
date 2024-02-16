@@ -46,7 +46,7 @@ def test_autograd():
             spherical_expansion_kwargs["positions"].requires_grad = True
             if is_compute_forces:
                 spherical_expansion = self.spherical_expansion_calculator(**spherical_expansion_kwargs)
-                tm = metatensor.torch.sum_over_samples(spherical_expansion, sample_names="center").components_to_properties(["m"]).keys_to_properties(["a_i", "lam", "sigma"])
+                tm = metatensor.torch.sum_over_samples(spherical_expansion, sample_names="atom").components_to_properties(["o3_mu"]).keys_to_properties(["center_type", "o3_lambda", "o3_sigma"])
                 energies = torch.sum(tm.block().values, axis=1)
 
                 gradient = torch.autograd.grad(

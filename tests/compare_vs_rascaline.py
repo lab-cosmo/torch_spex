@@ -135,15 +135,15 @@ calculator = rascaline.SphericalExpansion(**hypers_rascaline)
 spherical_expansion_coefficients_rascaline = calculator.compute(structures)
 
 all_neighbor_species = Labels(
-        names=["species_neighbor"],
+        names=["neighbor_type"],
         values=np.array(all_species, dtype=np.int32).reshape(-1, 1),
     )
 spherical_expansion_coefficients_rascaline = spherical_expansion_coefficients_rascaline.keys_to_properties(all_neighbor_species)
 
 for a_i in all_species:
     for l in range(l_max+1):
-        e = spherical_expansion_coefficients_torch_spex.block(lam=l, a_i=a_i).values
-        n_max_l = spherical_expansion_coefficients_torch_spex.block(lam=l, a_i=a_i).values.shape[2] // len(all_species)
+        e = spherical_expansion_coefficients_torch_spex.block(o3_lambda=l, center_type=a_i).values
+        n_max_l = spherical_expansion_coefficients_torch_spex.block(o3_lambda=l, center_type=a_i).values.shape[2] // len(all_species)
         rascaline_indices = []
         for a_i_index in range(len(all_species)):
             for n in range(n_max_l):
