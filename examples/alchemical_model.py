@@ -59,7 +59,6 @@ torch.manual_seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-# device = "cpu"
 print(f"Training on {device}")
 
 conversions = get_conversions()
@@ -88,7 +87,6 @@ hypers = {
         "scale": 3.0,
         "E_max": 350,
         "normalize": True,
-        "cost_trade_off": False
     }
 }
 if not normalize:
@@ -111,7 +109,7 @@ class Model(torch.nn.Module):
     def __init__(self, hypers, all_species, do_forces) -> None:
         super().__init__()
         self.all_species = all_species
-        self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species, device=device)
+        self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
         n_max = self.spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.n_max_l
         print("Radial basis:", n_max)
         l_max = len(n_max) - 1
@@ -211,7 +209,7 @@ def predict_epoch(model, data_loader):
     predicted_forces = []
     for batch in data_loader:
         batch.pop("energies")
-        batch.pop("forces")
+        if do_forces: batch.pop("forces")
         predicted_energies_batch, predicted_forces_batch = model(batch, is_training=False)
         predicted_energies.append(predicted_energies_batch)
         predicted_forces.append(predicted_forces_batch)
@@ -227,7 +225,7 @@ def train_epoch(model, data_loader, force_weight):
         total_loss = 0.0
         for batch in data_loader:
             energies = batch.pop("energies")
-            forces = batch.pop("forces")
+            if do_forces: forces = batch.pop("forces")
             optimizer.zero_grad()
             predicted_energies, predicted_forces = model(batch)
 
@@ -244,7 +242,7 @@ def train_epoch(model, data_loader, force_weight):
             total_loss = 0.0
             for batch in data_loader:
                 energies = batch.pop("energies")
-                forces = batch.pop("forces")
+                if do_forces: forces = batch.pop("forces")
                 predicted_energies, predicted_forces = model(batch)
 
                 loss = get_sse(predicted_energies, energies)
@@ -271,7 +269,8 @@ transformers = [
     TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device),
     TransformerProperty("energies", lambda frame: torch.tensor([frame.info["energy"]], dtype=torch.get_default_dtype(), device=device)*energy_conversion_factor),
 ]
-if do_forces: transformers.append(TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device)*force_conversion_factor))
+if do_forces:
+    transformers.append(TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device)*force_conversion_factor))
 
 predict_train_dataset = InMemoryDataset(train_structures, transformers)
 predict_test_dataset = InMemoryDataset(test_structures, transformers)
@@ -301,7 +300,7 @@ comp_calculator = AtomicComposition(all_species)
 train_comp = []
 for batch in predict_train_data_loader:
     batch.pop("energies")
-    batch.pop("forces")
+    if do_forces: batch.pop("forces")
     train_comp.append(
         comp_calculator(**batch)
     )

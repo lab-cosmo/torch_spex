@@ -52,7 +52,6 @@ torch.manual_seed(random_seed)
 print(f"Random seed: {random_seed}")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-# device = "cpu"
 print(f"Training on {device}")
 
 conversions = get_conversions()
@@ -91,7 +90,7 @@ class Model(torch.nn.Module):
     def __init__(self, hypers, all_species, do_forces) -> None:
         super().__init__()
         self.all_species = all_species
-        self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species, device=device)
+        self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
         n_max = self.spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.n_max_l
         print(n_max)
         l_max = len(n_max) - 1
@@ -237,7 +236,8 @@ transformers = [
     TransformerNeighborList(cutoff=hypers["cutoff radius"], device=device),
     TransformerProperty("energies", lambda frame: torch.tensor([frame.info["energy"]], dtype=torch.get_default_dtype(), device=device)*energy_conversion_factor),
 ]
-if do_forces: transformers.append(TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device)*force_conversion_factor))
+if do_forces:
+    transformers.append(TransformerProperty("forces", lambda frame: torch.tensor(frame.get_forces(), dtype=torch.get_default_dtype(), device=device)*force_conversion_factor))
 
 predict_train_dataset = InMemoryDataset(train_structures, transformers)
 predict_test_dataset = InMemoryDataset(test_structures, transformers)

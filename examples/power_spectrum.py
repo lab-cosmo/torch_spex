@@ -46,7 +46,7 @@ class PowerSpectrum(torch.nn.Module):
         power_spectrum = TensorMap(
             keys = Labels(
                 names = ("a_i",),
-                values = torch.tensor(keys), # .reshape((-1, 2)),
+                values = torch.tensor(keys, device=blocks[0].values.device),
             ), 
             blocks = blocks
         )
