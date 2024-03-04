@@ -9,6 +9,57 @@ from torch_spex.spherical_expansions import VectorExpansion, SphericalExpansion
 from torch_spex.structures import InMemoryDataset, TransformerNeighborList, collate_nl
 from torch.utils.data import DataLoader
 
+
+def rename_old_labels(labels: metatensor.torch.Labels):
+    # The reference values were saved with old names
+    new_labels = labels
+    if "l" in labels.names:
+        new_labels = new_labels.rename("l", "o3_lambda")
+    if "a_i" in labels.names:
+        new_labels = new_labels.rename("a_i", "center_type")
+    if "lam" in new_labels.names:
+        new_labels = new_labels.rename("lam", "o3_lambda")
+    if "sigma" in new_labels.names:
+        new_labels = new_labels.rename("sigma", "o3_sigma")
+    if "m" in new_labels.names:
+        new_labels = new_labels.rename("m", "o3_mu")
+    if "l1" in new_labels.names:
+        new_labels = new_labels.remove("l1")
+    if "center" in new_labels.names and "neighbor" not in new_labels.names:
+        new_labels = new_labels.rename("center", "atom")
+    if "a1" in new_labels.names:
+        new_labels = new_labels.rename("a1", "neighbor_type")
+    if "alphaj" in new_labels.names:
+        new_labels = new_labels.rename("alphaj", "neighbor_type")
+    if "alpha_j" in new_labels.names:
+        new_labels = new_labels.rename("alpha_j", "neighbor_type")
+    if "n1" in new_labels.names:
+        new_labels = new_labels.rename("n1", "n")
+    if "species_center" in new_labels.names:
+        new_labels = new_labels.rename("species_center", "center_type")
+    if "species_neighbor" in new_labels.names:
+        new_labels = new_labels.rename("species_neighbor", "neighbor_type")
+    if "direction" in new_labels.names:
+        new_labels = new_labels.rename("direction", "xyz")
+    return new_labels
+
+def rename_old_tm(tm: metatensor.torch.TensorMap):
+    # The reference values were saved with old names
+    keys = rename_old_labels(tm.keys)
+    blocks = []
+    for block in tm.blocks():
+        blocks.append(
+            metatensor.torch.TensorBlock(
+                values=block.values,
+                samples=rename_old_labels(block.samples),
+                components=[rename_old_labels(component) for component in block.components],
+                properties=rename_old_labels(block.properties)
+            )
+        )
+        
+    return metatensor.torch.TensorMap(keys=keys, blocks=blocks)
+
+
 class TestEthanol1SphericalExpansion:
     """
     Tests on the ethanol1 dataset
@@ -41,7 +92,7 @@ class TestEthanol1SphericalExpansion:
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
         # Because the reference value have been cacluated using float32 and
         # now we using float64 computation the accuracy had to be decreased again
-        assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(rename_old_tm(tm_ref), tm, atol=1e-5, rtol=1e-5)
 
         vector_expansion_script = torch.jit.script(vector_expansion)
         with torch.no_grad():
@@ -58,7 +109,7 @@ class TestEthanol1SphericalExpansion:
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
         # Because the reference value have been cacluated using float32 and
         # now we using float64 computation the accuracy had to be decreased again
-        assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(rename_old_tm(tm_ref), tm, atol=1e-5, rtol=1e-5)
 
         spherical_expansion_script = torch.jit.script(spherical_expansion_calculator)
         with torch.no_grad():
@@ -88,7 +139,7 @@ class TestEthanol1SphericalExpansion:
         # Default types are float32 so we cannot get higher accuracy than 1e-7.
         # Because the reference value have been cacluated using float32 and
         # now we using float64 computation the accuracy had to be decreased again
-        assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(rename_old_tm(tm_ref), tm, atol=1e-5, rtol=1e-5)
 
 class TestArtificialSphericalExpansion:
     """
@@ -116,7 +167,7 @@ class TestArtificialSphericalExpansion:
         vector_expansion = VectorExpansion(self.hypers, self.all_species).to(self.device, self.dtype)
         with torch.no_grad():
             tm = metatensor.torch.sort(vector_expansion.forward(**self.batch))
-        assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(rename_old_tm(tm_ref), tm, atol=1e-5, rtol=1e-5)
 
     def test_spherical_expansion_coeffs(self):
         tm_ref = metatensor.torch.load("tests/data/spherical_expansion_coeffs-artificial-data.npz")
@@ -126,7 +177,7 @@ class TestArtificialSphericalExpansion:
             tm = spherical_expansion_calculator.forward(**self.batch)
         # The absolute accuracy is a bit smaller than in the ethanol case
         # I presume it is because we use 5 frames instead of just one
-        assert metatensor.torch.allclose(tm_ref, tm, atol=3e-5, rtol=1e-5)
+        assert metatensor.torch.allclose(rename_old_tm(tm_ref), tm, atol=3e-5, rtol=1e-5)
 
     def test_spherical_expansion_coeffs_artificial(self):
         with open("tests/data/expansion_coeffs-artificial-alchemical-hypers.json", "r") as f:
@@ -144,4 +195,5 @@ class TestArtificialSphericalExpansion:
             )
         with torch.no_grad():
             tm = spherical_expansion_calculator.forward(**self.batch)
-        assert metatensor.torch.allclose(tm_ref, tm, atol=1e-5, rtol=1e-5)
+        print(rename_old_tm(tm_ref).block(0).properties)
+        assert metatensor.torch.allclose(rename_old_tm(tm_ref), tm, atol=1e-5, rtol=1e-5)

@@ -49,7 +49,7 @@ class RadialBasis(torch.nn.Module):
                     torch.nn.Linear(len(all_species), self.n_pseudo_species, bias=False)
             )
             self.species_neighbor_labels = Labels(
-                names = ["species_neighbor"],
+                names = ["neighbor_type"],
                 values = torch.tensor(self.all_species, dtype=torch.int).unsqueeze(1)
             )
         else:
@@ -86,8 +86,8 @@ class RadialBasis(torch.nn.Module):
 
     def radial_transform(self, r, samples_metadata: Labels):
         if self.is_physical:
-            a_i = samples_metadata.column("species_center")
-            a_j = samples_metadata.column("species_neighbor")
+            a_i = samples_metadata.column("center_type")
+            a_j = samples_metadata.column("neighbor_type")
             x = r/(0.1+torch.exp(self.lengthscales[a_i])+torch.exp(self.lengthscales[a_j]))
             return x
         else:

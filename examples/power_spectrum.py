@@ -19,7 +19,7 @@ class PowerSpectrum(torch.nn.Module):
             ps_values_ai = []
             for l in range(self.l_max+1):
                 cg = (2*l+1)**(-0.5)
-                block_ai_l = spex.block({"lam": l, "a_i": a_i})
+                block_ai_l = spex.block({"o3_lambda": l, "center_type": a_i})
                 c_ai_l = block_ai_l.values
 
                 # same as this:
@@ -33,7 +33,7 @@ class PowerSpectrum(torch.nn.Module):
 
             block = TensorBlock(
                 values=ps_values_ai,
-                samples=spex.block({"lam": 0, "a_i": a_i}).samples,
+                samples=spex.block({"o3_lambda": 0, "center_type": a_i}).samples,
                 components=[],
                 properties=Labels(
                     "property",

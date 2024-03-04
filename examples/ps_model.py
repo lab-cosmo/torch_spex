@@ -141,7 +141,7 @@ class Model(torch.nn.Module):
         atomic_energies = []
         structure_indices = []
         for ai, model_ai in self.nu2_model.items():
-            block = ps.block({"a_i": int(ai)})
+            block = ps.block({"center_type": int(ai)})
             features = block.values.squeeze(dim=1)
             structure_indices.append(block.samples.column("structure"))
             atomic_energies.append(
