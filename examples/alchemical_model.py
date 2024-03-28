@@ -110,7 +110,7 @@ class Model(torch.nn.Module):
         super().__init__()
         self.all_species = all_species
         self.spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
-        n_max = self.spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.n_max_l
+        n_max = self.spherical_expansion_calculator.radial_basis_calculator.n_max_l
         print("Radial basis:", n_max)
         l_max = len(n_max) - 1
         n_feat = sum([n_max[l]**2 * n_pseudo**2 for l in range(l_max+1)])
