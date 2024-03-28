@@ -4,9 +4,10 @@ import math
 import torch
 from metatensor.torch import TensorMap, Labels, TensorBlock
 import sphericart.torch
+from .operations import outer_product_scatter_add
 
 from .radial_basis import RadialBasis
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 class SphericalExpansion(torch.nn.Module):
@@ -90,14 +91,23 @@ class SphericalExpansion(torch.nn.Module):
             self.normalization_factor = 1.0  # dummy for torchscript
             self.normalization_factor_0 = 1.0  # dummy for torchscript
         self.all_species = all_species
-        self.vector_expansion_calculator = VectorExpansion(hypers, self.all_species)
 
+        # radial basis needs to know cutoff so we pass it, as well as whether to normalize or not
+        hypers_radial_basis = copy.deepcopy(hypers["radial basis"])
+        hypers_radial_basis["r_cut"] = hypers["cutoff radius"]
+        hypers_radial_basis["normalize"] = self.normalize
         if "alchemical" in self.hypers:
             self.is_alchemical = True
             self.n_pseudo_species = self.hypers["alchemical"]
+            hypers_radial_basis["alchemical"] = self.hypers["alchemical"]
         else:
-            self.is_alchemical = False
             self.n_pseudo_species = 0  # dummy for torchscript
+            self.is_alchemical = False
+        self.radial_basis_calculator = RadialBasis(hypers_radial_basis, all_species)
+        self.l_max = self.radial_basis_calculator.l_max
+        self.n_max_l = self.radial_basis_calculator.n_max_l
+        self.spherical_harmonics_calculator = sphericart.torch.SphericalHarmonics(self.l_max, normalized=True)
+        self.spherical_harmonics_split_list = [(2*l+1) for l in range(self.l_max+1)]
 
     def forward(self,
             positions: torch.Tensor,
@@ -124,7 +134,7 @@ class SphericalExpansion(torch.nn.Module):
                 the original cell expressed with the cell basis.
         :param centers: [n_atoms] tensor of integers with the atom indices
                 for all centers over all structures
-        :param centers: [n_pairs, 2] tensor of integers with the atom indices
+        :param pairs: [n_pairs, 2] tensor of integers with the atom indices
                 for all center and neighbor pairs over all structures
         :param structure_centers: [n_atoms] tensor of integers with the indices of the
                 corresponding structure for each central atom
@@ -138,10 +148,19 @@ class SphericalExpansion(torch.nn.Module):
             :math:`c^{a_il}_{Ai, m, a_jn}`
         """
 
-        expanded_vectors = self.vector_expansion_calculator(
-                positions, cells, species, cell_shifts, centers, pairs, structure_centers, structure_pairs, structure_offsets)
+        cartesian_vectors = get_cartesian_vectors(positions, cells, species, cell_shifts, centers, pairs, structure_centers, structure_pairs, structure_offsets)
 
-        samples_metadata = expanded_vectors.block({"o3_lambda": 0}).samples
+        bare_cartesian_vectors = cartesian_vectors.values.squeeze(dim=-1)
+        r = torch.sqrt(
+            (bare_cartesian_vectors**2)
+            .sum(dim=-1)
+        )
+        samples_metadata = cartesian_vectors.samples  # This can be needed by the radial basis to do alchemical contractions
+        radial_basis = self.radial_basis_calculator(r, samples_metadata)
+
+        spherical_harmonics = self.spherical_harmonics_calculator.compute(bare_cartesian_vectors)  # Get the spherical harmonics
+        if self.normalize: spherical_harmonics *= (4*torch.pi)**(0.5)  # normalize them
+        spherical_harmonics = torch.split(spherical_harmonics, self.spherical_harmonics_split_list, dim=1)  # Split them into l chunks
 
         n_species = len(self.all_species)
         species_to_index = {atomic_number : i_species for i_species, atomic_number in enumerate(self.all_species)}
@@ -149,21 +168,14 @@ class SphericalExpansion(torch.nn.Module):
         unique_s_i_indices = torch.stack((structure_centers, centers), dim=1)
         s_i_metadata_to_unique = structure_offsets[structure_pairs] + pairs[:, 0]
 
-        l_max = self.vector_expansion_calculator.l_max
         n_centers = len(centers)  # total number of atoms in this batch of structures
 
         densities = []
         if self.is_alchemical:
             density_indices = s_i_metadata_to_unique
-            for l in range(l_max+1):
-                expanded_vectors_l = expanded_vectors.block({"o3_lambda": l}).values
-                densities_l = torch.zeros(
-                    (n_centers, expanded_vectors_l.shape[1], expanded_vectors_l.shape[2]),
-                    dtype = expanded_vectors_l.dtype,
-                    device = expanded_vectors_l.device
-                )
-                densities_l.index_add_(dim=0, index=density_indices, source=expanded_vectors_l)
-                densities_l = densities_l.reshape((n_centers, 2*l+1, -1))
+            for l in range(self.l_max+1):
+                # in the case of an alchemical model, the radial basis has an extra dimension (alpha_j)
+                densities_l = outer_product_scatter_add(spherical_harmonics[l], radial_basis[l].reshape(len(pairs), -1), density_indices.to(torch.int32), n_centers)
                 densities.append(densities_l)
             unique_species = -torch.arange(self.n_pseudo_species, dtype=torch.int64, device=density_indices.device)
         else:
@@ -171,14 +183,8 @@ class SphericalExpansion(torch.nn.Module):
             aj_shifts = torch.tensor([species_to_index[int(aj_index)] for aj_index in aj_metadata], dtype=torch.int64, device=aj_metadata.device)
             density_indices = s_i_metadata_to_unique*n_species+aj_shifts
 
-            for l in range(l_max+1):
-                expanded_vectors_l = expanded_vectors.block({"o3_lambda": l}).values
-                densities_l = torch.zeros(
-                    (n_centers*n_species, expanded_vectors_l.shape[1], expanded_vectors_l.shape[2]),
-                    dtype = expanded_vectors_l.dtype,
-                    device = expanded_vectors_l.device
-                )
-                densities_l.index_add_(dim=0, index=density_indices, source=expanded_vectors_l)
+            for l in range(self.l_max+1):
+                densities_l = outer_product_scatter_add(spherical_harmonics[l], radial_basis[l], density_indices.to(torch.int32), n_centers*n_species)
                 densities_l = densities_l.reshape((n_centers, n_species, 2*l+1, -1)).swapaxes(1, 2).reshape((n_centers, 2*l+1, -1))  # need to swap n, a indices which are in the wrong order
                 densities.append(densities_l)
             unique_species = torch.tensor(self.all_species, dtype=torch.int, device=species.device)
@@ -186,11 +192,9 @@ class SphericalExpansion(torch.nn.Module):
         # constructs the TensorMap object
         labels : List[List[int]] = []
         blocks : List[TensorBlock] = []
-        for l in range(l_max+1):
+        for l in range(self.l_max+1):
             densities_l = densities[l]
-            vectors_l_block = expanded_vectors.block({"o3_lambda": l})
-            vectors_l_block_components = vectors_l_block.components
-            vectors_l_block_n = torch.arange(len(torch.unique(vectors_l_block.properties.column("n"))), dtype=torch.int64, device=species.device)  # Need to be smarter to optimize
+            vectors_l_block_n = torch.arange(self.n_max_l[l], dtype=torch.int32, device=species.device)
             for a_i in self.all_species:
                 where_ai = torch.where(species == a_i)[0]
                 densities_ai_l = torch.index_select(densities_l, 0, where_ai)
@@ -208,7 +212,10 @@ class SphericalExpansion(torch.nn.Module):
                             names = ["structure", "atom"],
                             values = unique_s_i_indices[where_ai]
                         ),
-                        components = vectors_l_block_components,
+                        components = [Labels(
+                            names = ("o3_mu",),
+                            values = torch.arange(start=-l, end=l+1, dtype=torch.int32, device=spherical_harmonics[0].device).reshape(2*l+1, 1)
+                        )],
                         properties = Labels(
                             names = ["neighbor_type", "n"],
                             values = torch.stack(
