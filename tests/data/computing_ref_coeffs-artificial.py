@@ -41,7 +41,7 @@ torch.manual_seed(0) # set for the combination_matrix in SphericalExpansion
 spherical_expansion_calculator = SphericalExpansion(hypers, all_species)
 # some random combination matrix, it is only important that we use the same one in the tests
 with torch.no_grad():
-    spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.combination_matrix.weight.copy_(
+    spherical_expansion_calculator.radial_basis_calculator.combination_matrix.weight.copy_(
         torch.tensor(
             [[-0.00432252,  0.30971584, -0.47518533],
              [-0.4248946 , -0.22236897,  0.15482073]],

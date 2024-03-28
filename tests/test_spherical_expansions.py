@@ -129,7 +129,7 @@ class TestEthanol1SphericalExpansion:
         with torch.no_grad():
             # wtf? suggested way by torch developers
             # https://discuss.pytorch.org/t/initialize-nn-linear-with-specific-weights/29005/4
-            spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.combination_matrix.weight.copy_(torch.tensor(
+            spherical_expansion_calculator.radial_basis_calculator.combination_matrix.weight.copy_(torch.tensor(
                     [[-0.00432252,  0.30971584, -0.47518533],
                      [-0.4248946 , -0.22236897,  0.15482073]],
                     device=self.device, dtype=self.dtype))
@@ -186,7 +186,7 @@ class TestArtificialSphericalExpansion:
         tm_ref = tm_ref.to(device=self.device, dtype=self.dtype)
         spherical_expansion_calculator = SphericalExpansion(hypers, self.all_species).to(self.device, self.dtype)
         with torch.no_grad():
-            spherical_expansion_calculator.vector_expansion_calculator.radial_basis_calculator.combination_matrix.weight.copy_(
+            spherical_expansion_calculator.radial_basis_calculator.combination_matrix.weight.copy_(
                 torch.tensor(
                     [[-0.00432252,  0.30971584, -0.47518533],
                      [-0.4248946 , -0.22236897,  0.15482073]],
